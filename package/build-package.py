@@ -1,9 +1,15 @@
 """组装「月声整合包」到 package\\MoonVoice\\。
 
 用法：
+    set MOONVOICE_SRC=D:\\path\\to\\your\\deploy      # 第三方大件的来源目录，必填
     python build-package.py                 # 硬链接大文件（几乎不占额外空间）
     python build-package.py --no-link       # 老老实实复制（跨盘或想要完全独立时用）
     python build-package.py --zip           # 顺便打成 月声整合包.zip
+    python build-package.py --reset-data    # 重铺 data\\（会清掉用户在工作台存的音色）
+
+`--src` / 环境变量 `MOONVOICE_SRC` 指向的目录不在本仓库里（体积 GB 级、模型另有
+许可），需要自己准备，结构见下面 DEPLOY 那一段的注释。`--ffmpeg` / 环境变量
+`FFMPEG` 用于指定 ffmpeg（只在需要转码场景音效时才会找它，包已转好时可以不装）。
 
 为什么 staging 目录必须叫 MoonVoice（纯 ASCII）：
     Breeze 后端是 C++ 程序，在 Windows 上按 ANSI 代码页打开文件，路径含中文
@@ -13,10 +19,10 @@
     但说明文档与启动脚本都会检查解压后的路径并在含中文时给出明确提示。
 
 体积构成：
-    backend\\runtime      1.01 GB   硬链接自 audiocpp\\runtime（187 个文件）
-    backend\\models\\...   6.84 GB   硬链接自 audiocpp\\models
+    backend\\runtime      1.01 GB   硬链接自 <SRC>\\audiocpp\\runtime（187 个文件）
+    backend\\models\\...   6.84 GB   硬链接自 <SRC>\\audiocpp\\models
     sidecar\\*.exe         35 MB    复制自仓库 server\\dist
-    data\\                   0        空目录，用户数据
+    data\\                 31 MB    22 个样例音色 + 9 段样例场景音效
     文档\\                   小
 
 **程序目录必须用 ASCII 名（backend / sidecar / data）**：
@@ -38,10 +44,39 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 
-# 第三方大件（来自作者本机的部署目录）
-DEPLOY = Path(r"E:\projects\BreezeTTS2")
-AUDIOCPP = DEPLOY / "audiocpp"
-MODEL_LICENSE_SRC = DEPLOY / "breeze-tts-2" / "LICENSE"
+# 第三方大件的来源目录。这些**不在本仓库里**（体积 GB 级、模型另有许可），
+# 需要自己准备一份，目录结构要求：
+#
+#     <SRC>/
+#     ├─ audiocpp/
+#     │   ├─ runtime/           audio.cpp 发布包解出来的运行时
+#     │   ├─ models/Breeze-TTS-2-GGUF/breeze-tts-2-bf16.gguf
+#     │   └─ server.json
+#     ├─ breeze-tts-2/LICENSE   模型许可原文（上游仓库里的那个）
+#     └─ plugin/                可选：随包样例音色的来源
+#         ├─ voices/            22 个示例音色（wav + 同名 txt 逐字稿）
+#         └─ pjy/{环境音效,事件音效}/   随包场景音效的源 WAV
+#
+# 用环境变量 MOONVOICE_SRC 或命令行 --src 指定。
+SRC_ENV = "MOONVOICE_SRC"
+DEPLOY: Path | None = Path(os.environ[SRC_ENV]).expanduser() if os.environ.get(SRC_ENV) else None
+AUDIOCPP: Path = Path()
+MODEL_LICENSE_SRC: Path = Path()
+
+
+def set_deploy(path: Path) -> None:
+    """设定第三方大件来源目录（--src 会调它）。"""
+    global DEPLOY, AUDIOCPP, MODEL_LICENSE_SRC
+    DEPLOY = path.expanduser().resolve()
+    AUDIOCPP = DEPLOY / "audiocpp"
+    MODEL_LICENSE_SRC = DEPLOY / "breeze-tts-2" / "LICENSE"
+
+
+if DEPLOY is not None:
+    set_deploy(DEPLOY)
+
+# --ffmpeg 解析出来的值，在 main() 里填；find_ffmpeg() 会优先用它。
+FFMPEG_ARG = ""
 
 MODEL_REL = Path("models") / "Breeze-TTS-2-GGUF" / "breeze-tts-2-bf16.gguf"
 SIDECAR_EXE = REPO / "server" / "dist" / "moonvoice-sidecar.exe"
@@ -63,6 +98,29 @@ SCENE_SAMPLES = [
     ("环境音效", "雨声.wav"),
     ("环境音效", "雨声_室内.wav"),
     ("事件音效", "房间_开门.wav"),
+]
+
+# 随包分发的 22 个样例音色（源：<SRC>/plugin/voices 里用「语音设计」生成的那一批）。
+#
+# **必须显式列清单，不能扫描整个 voices 目录。** 那是使用者的开发音色库：
+# 里面有他自己录的、克隆的、乃至私人用途的音色。扫描式拷贝会把它们
+# 静默打进分发包——一次不容易被发现的隐私泄漏。SCENE_SAMPLES 当初就是
+# 出于同样的理由写成清单的，这里遵循同一原则。
+#
+# 这 22 个由 Breeze TTS 2 的「声音设计」生成，不是真人录音，
+# 逐字稿统一为一句话（见下面的 SAMPLE_VOICE_TEXT）。
+SAMPLE_VOICES = [
+    ("中性-未定", "中性01"), ("中性-未定", "中性02"),
+    ("女-儿童", "女童01"), ("女-儿童", "女童02"),
+    ("女-少年", "女少02"), ("女-少年", "女少03"),
+    ("女-青年", "女青01"), ("女-青年", "女青02"),
+    ("女-中年", "女中01"), ("女-中年", "女中02"),
+    ("女-老年", "女老01"), ("女-老年", "女老02"),
+    ("男-儿童", "男童01"), ("男-儿童", "男童03"),
+    ("男-少年", "男少01"), ("男-少年", "男少04"),
+    ("男-青年", "男青01"), ("男-青年", "男青02"),
+    ("男-中年", "男中01"), ("男-中年", "男中02"),
+    ("男-老年", "男老02"), ("男-老年", "男老03"),
 ]
 
 TARGET = HERE / "MoonVoice"
@@ -199,18 +257,19 @@ Sony Pictures Entertainment，分发即构成侵权；其余文件也查不到�
 """)
 
 
-FFMPEG_CANDIDATES = [
-    os.environ.get("FFMPEG", ""),
-    r"D:\tools\indextts2-env\ffmpeg.exe",
-    r"D:\tools\indextts2-env\env\ffmpeg\bin\ffmpeg.exe",
-    r"E:\projects\indextts2-windows\index-tts2-nvidia\ffmpeg.exe",
-    "ffmpeg",
-]
-
-
 def find_ffmpeg() -> str:
-    """找一个可用的 ffmpeg。可用环境变量 FFMPEG 指定。"""
-    for cand in FFMPEG_CANDIDATES:
+    """找一个可用的 ffmpeg。
+
+    只认三处（按优先级）：`--ffmpeg` 参数、环境变量 FFMPEG、PATH 里的 ffmpeg。
+    刻意不内置任何本机绝对路径——那会把开发者的目录结构带进公开仓库。
+    Windows 上装一份（winget install Gyan.FFmpeg，或从 gyan.dev 下载）
+    再把它加进 PATH，或者用上面两种方式指过去即可。
+
+    候选列表在这里现场拼，不在模块层做常量——否则 --ffmpeg 在导入时
+    就已经被固化，命令行参数会失效。
+    """
+    candidates = [FFMPEG_ARG, os.environ.get("FFMPEG", ""), "ffmpeg"]
+    for cand in candidates:
         if not cand:
             continue
         if cand == "ffmpeg" or Path(cand).is_file():
@@ -223,7 +282,11 @@ def find_ffmpeg() -> str:
                 continue
     raise SystemExit(
         "[中止] 找不到 ffmpeg。转码场景音效需要它。\n"
-        "        可用环境变量指定：set FFMPEG=<ffmpeg.exe 的完整路径>")
+        "        三种指定方式，任选其一：\n"
+        "          build-package.py --ffmpeg D:\\ffmpeg\\bin\\ffmpeg.exe\n"
+        "          set FFMPEG=D:\\ffmpeg\\bin\\ffmpeg.exe\n"
+        "          把它加进 PATH\n"
+        "        下载：https://www.gyan.dev/ffmpeg/builds/ （需要含 libvorbis）")
 
 
 def transcode_scene_audio(force: bool = False) -> int:
@@ -251,10 +314,10 @@ def transcode_scene_audio(force: bool = False) -> int:
     不包含任何 mp3：来源无法确认，其中一个的 ID3 版权字段标注为
     Sony Pictures Entertainment。
     """
-    ff = find_ffmpeg()
     total_src = 0
     total_dst = 0
     n = 0
+    todo: list[tuple[Path, Path, str, str]] = []
     for sub, name in SCENE_SAMPLES:
         src = DEPLOY / "plugin" / "pjy" / sub / name
         if not src.is_file():
@@ -268,7 +331,12 @@ def transcode_scene_audio(force: bool = False) -> int:
             n += 1
             print(f"    {sub}\\{name:<20} -> {dst.name:<20}   已存在，跳过")
             continue
+        todo.append((src, dst, sub, name))
 
+    # ffmpeg 只在真的要转码时才去找：整包都转好之后重建不应再依赖它
+    ff = find_ffmpeg() if todo else ""
+
+    for src, dst, sub, name in todo:
         cmd = [ff, "-y", "-hide_banner", "-loglevel", "error",
                "-i", str(src),
                "-vn",                      # 去掉内嵌封面（否则会多出一条 theora 视频流）
@@ -346,6 +414,11 @@ def dir_size(p: Path) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--src", metavar="DIR",
+                    help=f"第三方大件的来源目录（audio.cpp 运行时 / 模型 / 模型许可）。"
+                         f"也可以用环境变量 {SRC_ENV}。")
+    ap.add_argument("--ffmpeg", metavar="EXE", default="",
+                    help="ffmpeg 可执行文件路径。也可以用环境变量 FFMPEG，或放进 PATH。")
     ap.add_argument("--no-link", action="store_true", help="复制而不是硬链接")
     ap.add_argument("--zip", action="store_true", help="顺便打成 zip")
     ap.add_argument("--reset-data", action="store_true",
@@ -355,10 +428,26 @@ def main() -> int:
     args = ap.parse_args()
     link = not args.no_link
 
+    global FFMPEG_ARG
+    FFMPEG_ARG = args.ffmpeg
+
+    if args.src:
+        set_deploy(Path(args.src))
+    if DEPLOY is None:
+        raise SystemExit(
+            "[中止] 没指定第三方大件的来源目录。\n"
+            f"        用 --src <DIR> 或环境变量 {SRC_ENV}=<DIR>。\n"
+            "        该目录下应有 audiocpp\\、breeze-tts-2\\LICENSE，"
+            "（可选）plugin\\voices 与 plugin\\pjy。\n"
+            "        详见本文件顶部注释。")
+    if not AUDIOCPP.is_dir():
+        raise SystemExit(f"[中止] {AUDIOCPP} 不存在。--src 指错了吗？")
+
     print("=" * 62)
     print("  组装 月声整合包")
     print("=" * 62)
     print(f"  目标: {TARGET}")
+    print(f"  来源: {DEPLOY}")
     print(f"  大文件: {'硬链接（省空间）' if link else '复制'}")
     print()
 
@@ -434,19 +523,22 @@ def main() -> int:
     else:
         voices_src = DEPLOY / "plugin" / "voices"
         n_samples = 0
-        for f in sorted(voices_src.rglob("*")):
-            if not f.is_file():
-                continue
-            if f.name in ("_说明.md", "_说明.txt"):
-                continue
-            rel = f.relative_to(voices_src)
-            dst = voices_dir / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            # 复制而不是硬链接：让整合包里的样例与开发库互相独立，
-            # 避免用户在包里改动（或删除）时影响到开发库。
-            shutil.copy2(f, dst)
-            n_samples += 1
-        print(f"  附带 {n_samples} 个音色文件")
+        for tag, stem in SAMPLE_VOICES:
+            for ext in (".wav", ".txt"):
+                f = voices_src / tag / (stem + ext)
+                if not f.is_file():
+                    raise SystemExit(
+                        f"[中止] 找不到样例音色源文件：{f}\n"
+                        f"        随包样例是 SAMPLE_VOICES 里显式列出的这 "
+                        f"{len(SAMPLE_VOICES)} 个，需要你自己准备一份放在 "
+                        f"<SRC>/plugin/voices/<标签>/ 下。")
+                dst = voices_dir / tag / f.name
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                # 复制而不是硬链接：让整合包里的样例与开发库互相独立，
+                # 避免用户在包里改动（或删除）时影响到开发库。
+                shutil.copy2(f, dst)
+                n_samples += 1
+        print(f"  附带 {n_samples} 个音色文件（{len(SAMPLE_VOICES)} 个样例 × wav+txt）")
     (voices_dir / "_说明.txt").write_bytes(VOICES_NOTE)
 
     print("--- 7) 场景音效：折叠立体声 + 转码 OGG 后随包 ---")

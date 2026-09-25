@@ -146,26 +146,31 @@ Breeze 合成很快（参考音频缓存命中后单句约 0.5 秒），所以"�
 
 ## 安装与启动
 
-### 1. 启动 Breeze 后端
+用户视角的步骤见 [README](../README.md#快速开始)。这里只记开发时的两条命令。
 
-```cmd
-E:\projects\BreezeTTS2\audiocpp\start.cmd
-```
+### 1. 启动 Breeze 后端（端口 7870）
+
+用整合包就双击 `启动后端.cmd`。自己搭则按上游 [breezeblue-ai/breeze-tts](https://github.com/breezeblue-ai/breeze-tts)
+的说明起 `audiocpp`（GGUF）或 PyTorch 版，监听 `127.0.0.1:7870`。
 
 ### 2. 启动 sidecar（端口 7881）
 
-```cmd
-E:\projects\BreezeTTS2\.venv\Scripts\python.exe E:\projects\BreezeTTS2\plugin\breeze_api.py
+```bash
+cd server
+python breeze_api.py                  # 默认数据目录就是当前目录
+python breeze_api.py --data-dir <dir> # 想把音色库放到别处
 ```
 
 音色库管理页：<http://127.0.0.1:7881/>
 
 ### 场景音效放在哪
 
+放在**数据目录**的 `pjy/` 下（默认与 `breeze_api.py` 同级；整合包里是 `data/pjy/`）：
+
 ```
-E:\projects\BreezeTTS2\plugin\pjy\
-├── 环境音效\     循环播放，例如 乡村清晨.mp3、雨声_室内.mp3
-└── 事件音效\     只响一次，例如 敲门.mp3、电话铃.mp3、干杯.mp3
+<数据目录>/pjy/
+├── 环境音效/     循环播放，例如 雨声.ogg、森林.ogg
+└── 事件音效/     只响一次，例如 房间_开门.ogg、敲门.mp3
 ```
 
 **子文件夹决定播放方式**，提示词不需要为此做任何改动——模型照常写 `[敲门]`，
