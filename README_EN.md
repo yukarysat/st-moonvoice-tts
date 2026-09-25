@@ -263,17 +263,19 @@ Both subfolders are created automatically on first run:
 Supported: `.mp3` `.wav` `.ogg` `.m4a` `.aac` `.flac`. The name the LLM writes in the brackets is the **filename without extension**.
 On a name collision, `环境音效/` wins.
 
-> **The package ships nine scene sounds** (8 ambient + 1 event), ready to use:
+> **The package ships nine scene sounds**, ready to use. On disk they sit in two folders, but in the
+> prompt they are written into a **single list** — the extension resolves the name to a file, and
+> whether it loops or fires once is decided by the folder that file is in:
 >
 > ```
-> ambient: 乡村_傍晚  森林  森林_清晨  森林_起风
->          沙滩_海浪  瀑布  雨声  雨声_室内
-> event:   房间_开门
+> 环境音效/ (loops): 乡村_傍晚  森林  森林_清晨  森林_起风
+>                   沙滩_海浪  瀑布  雨声  雨声_室内
+> 事件音效/ (once):  房间_开门
 > ```
 >
-> To use your own, drop the files into those two folders and change the prompt's sound list to the
-> matching **filenames without extension**. The extension does not validate names — a typo is
-> silently silent, not an error.
+> To use your own, drop the files into those two folders and change the **normal scene list** under
+> the prompt's 「可用环境音」 section to the matching **filenames without extension**. The extension
+> does not validate names — a typo is silently silent, not an error.
 >
 > **No audio files are bundled with this repository.** They are large, and some of them may not be
 > appropriate to redistribute. Supply your own, or use a sound library with a clear licence.
