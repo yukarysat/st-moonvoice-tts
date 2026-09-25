@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Breeze TTS 2 · 音色库管理</title>
+<style>
+  :root { --bd:#2b3a55; --bg:#0f172a; --card:#16233b; --fg:#e6edf7; --mut:#8fa3bf;
+          --ok:#3fb950; --warn:#d29922; --err:#f85149; --acc:#4c8dff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.6 "Segoe UI","Microsoft YaHei",system-ui,sans-serif; }
+  header { padding:18px 24px; border-bottom:1px solid var(--bd);
+           display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:17px; font-weight:600; }
+  .pill { padding:3px 10px; border-radius:99px; font-size:12px; border:1px solid var(--bd); }
+  .pill.ok { color:var(--ok); border-color:var(--ok); }
+  .pill.bad { color:var(--err); border-color:var(--err); }
+  main { padding:20px 24px 60px; max-width:1180px; }
+  section { background:var(--card); border:1px solid var(--bd); border-radius:10px;
+            padding:16px 18px; margin-bottom:18px; }
+  h2 { margin:0 0 12px; font-size:15px; font-weight:600; }
+  .hint { color:var(--mut); font-size:12.5px; margin:-4px 0 12px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input[type=text], input[type=number], textarea {
+    background:#0c1526; color:var(--fg); border:1px solid var(--bd);
+    border-radius:6px; padding:7px 9px; font:inherit; }
+  textarea { width:100%; min-height:64px; resize:vertical; }
+  button { background:var(--acc); color:#fff; border:0; border-radius:6px;
+           padding:7px 14px; font:inherit; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--bd); color:var(--fg); }
+  button.danger { background:transparent; border:1px solid var(--err); color:var(--err); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; vertical-align:top; padding:9px 8px; border-bottom:1px solid var(--bd); }
+  th { color:var(--mut); font-weight:500; font-size:12.5px; }
+  .mono { font-family:Consolas,monospace; font-size:12.5px; }
+  .warn { color:var(--warn); font-size:12.5px; }
+  .bad  { color:var(--err); }
+  .tag { font-size:11.5px; padding:2px 7px; border-radius:99px; border:1px solid var(--bd); color:var(--mut); }
+  .tag.ok { color:var(--ok); border-color:var(--ok); }
+  .tag.no { color:var(--warn); border-color:var(--warn); }
+  #toast { position:fixed; right:18px; bottom:18px; display:flex; flex-direction:column; gap:8px; }
+  .toast { background:var(--card); border:1px solid var(--bd); border-left:3px solid var(--acc);
+           padding:10px 14px; border-radius:8px; max-width:380px; box-shadow:0 6px 20px #0007; }
+  .toast.err { border-left-color:var(--err); }
+  .toast.ok  { border-left-color:var(--ok); }
+  audio { height:32px; vertical-align:middle; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Breeze TTS 2 · 音色库管理</h1>
+  <span class="pill" id="be">后端检测中…</span>
+  <span class="pill" id="cnt">— 个音色</span>
+  <span style="flex:1"></span>
+  <span class="hint" style="margin:0">sidecar 7881 · 后端 <span class="mono" id="burl"></span></span>
+</header>
+
+<main>
+  <section>
+    <h2>1 · 添加参考音频</h2>
+    <p class="hint">
+      上传后<strong>必须填写逐字稿</strong>，否则该音色无法用于克隆 —— Breeze 会把逐字稿和音频一起编码进提示，
+      不一致会直接拉低克隆相似度。建议参考音频 <strong>6–10 秒</strong>、干净、情绪平稳、无背景噪音。
+    </p>
+    <div class="row">
+      <input type="file" id="file" accept="audio/*" />
+      <button id="upload">上传</button>
+      <span class="hint" id="upmsg" style="margin:0"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>2 · 音色列表</h2>
+    <p class="hint">
+      「默认指令」在台词没有情感标签时使用；留空则走纯克隆。`guidance_scale` 越大情绪越强（4 推荐），
+      但生成更慢。
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:150px">音色 / 状态</th>
+          <th style="width:190px">参考</th>
+          <th>逐字稿（必须与音频完全一致）</th>
+          <th style="width:250px">默认指令 / cfg</th>
+          <th style="width:150px">操作</th>
+        </tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="5" class="hint">加载中…</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+
+function toast(msg, kind = "") {
+  const el = document.createElement("div");
+  el.className = "toast " + kind;
+  el.textContent = msg;
+  $("#toast").appendChild(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return res.headers.get("content-type")?.includes("json") ? res.json() : res;
+}
+
+async function refreshHealth() {
+  try {
+    const h = await api("/health");
+    $("#burl").textContent = h.backend;
+    const be = $("#be");
+    be.textContent = h.backend_ok ? "Breeze 后端正常" : "Breeze 后端不可用";
+    be.className = "pill " + (h.backend_ok ? "ok" : "bad");
+  } catch (e) {
+    $("#be").textContent = "sidecar 异常";
+    $("#be").className = "pill bad";
+  }
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function loudnessCell(v) {
+  const db = v.rms_dbfs;
+  let cls = "", note = "";
+  if (db > -14) { cls = "warn"; note = "偏响，输出可能像在喊"; }
+  else if (db < -30) { cls = "warn"; note = "偏轻，克隆可能不稳"; }
+  const dur = v.duration_s ? v.duration_s.toFixed(1) + "s" : "?";
+  const len = v.duration_s && v.duration_s > 15
+    ? `<div class="warn">时长 ${dur}，建议裁到 6–10s</div>` : "";
+  return `<div>${dur}</div><div class="${cls}">${db} dBFS</div>`
+       + (note ? `<div class="${cls}">${note}</div>` : "") + len;
+}
+
+async function load() {
+  const data = await api("/voices");
+  $("#cnt").textContent = data.count + " 个音色";
+  const tbody = $("#rows");
+  if (!data.count) {
+    tbody.innerHTML = '<tr><td colspan="5" class="hint">音色库为空，请先上传参考音频。</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.voices.map(v => `
+    <tr data-id="${esc(v.filename)}">
+      <td>
+        <div class="mono">${esc(v.filename)}</div>
+        <div style="margin-top:5px">
+          <span class="tag ${v.ready ? "ok" : "no"}">${v.ready ? "可用" : "缺逐字稿"}</span>
+        </div>
+      </td>
+      <td>${loudnessCell(v)}</td>
+      <td><textarea data-f="ref_text" placeholder="填写参考音频里说的原话…">${esc(v.ref_text)}</textarea></td>
+      <td>
+        <input type="text" data-f="default_instruction" style="width:100%"
+               placeholder="无情感标签时使用" value="${esc(v.default_instruction)}" />
+        <div class="row" style="margin-top:6px">
+          <span class="hint" style="margin:0">cfg</span>
+          <input type="number" data-f="guidance_scale" step="0.5" min="1" max="10"
+                 style="width:76px" value="${esc(v.guidance_scale)}" />
+        </div>
+      </td>
+      <td>
+        <div class="row">
+          <button class="save">保存</button>
+          <button class="ghost play">试听</button>
+          <button class="danger del">删除</button>
+        </div>
+        <audio class="prev" controls preload="none" style="display:none;margin-top:6px"></audio>
+      </td>
+    </tr>`).join("");
+
+  tbody.querySelectorAll("tr").forEach(tr => {
+    const id = tr.dataset.id;
+    tr.querySelector(".save").onclick = async () => {
+      const body = {};
+      tr.querySelectorAll("[data-f]").forEach(el => {
+        body[el.dataset.f] = el.dataset.f === "guidance_scale" ? Number(el.value) : el.value;
+      });
+      try {
+        await api("/voices/" + encodeURIComponent(id), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        toast("已保存 " + id, "ok");
+        load();
+      } catch (e) { toast("保存失败: " + e.message, "err"); }
+    };
+    tr.querySelector(".play").onclick = () => {
+      const a = tr.querySelector(".prev");
+      a.src = "/voices/" + encodeURIComponent(id) + "/audio?t=" + Date.now();
+      a.style.display = "block";
+      a.play().catch(() => {});
+    };
+    tr.querySelector(".del").onclick = async () => {
+      if (!confirm("确认删除 " + id + " ？（音频与元数据一并删除）")) return;
+      try {
+        await api("/voices/" + encodeURIComponent(id), { method: "DELETE" });
+        toast("已删除 " + id, "ok");
+        load();
+      } catch (e) { toast("删除失败: " + e.message, "err"); }
+    };
+  });
+}
+
+$("#upload").onclick = async () => {
+  const f = $("#file").files[0];
+  if (!f) { toast("请先选择文件", "err"); return; }
+  const fd = new FormData();
+  fd.append("file", f, f.name);
+  $("#upmsg").textContent = "上传中…";
+  try {
+    const r = await api("/api/v1/upload", { method: "POST", body: fd });
+    $("#upmsg").textContent = "";
+    toast(`已上传 ${r.filename}（${r.duration_s}s / ${r.rms_dbfs} dBFS）`, "ok");
+    if (r.warning) toast(r.warning, "err");
+    $("#file").value = "";
+    load();
+  } catch (e) {
+    $("#upmsg").textContent = "";
+    toast("上传失败: " + e.message, "err");
+  }
+};
+
+refreshHealth();
+load();
+setInterval(refreshHealth, 20000);
+</script>
+</body>
+</html>

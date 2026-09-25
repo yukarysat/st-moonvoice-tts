@@ -1,0 +1,16 @@
+# Breeze TTS Player —— 侧车（接口层）依赖
+#
+# 刻意保持轻量：侧车不做推理，只负责音色库管理、逐字稿、场景音效托管，
+# 以及把 /tts 请求转发给 Breeze 后端。因此**不需要 torch / CUDA**。
+#
+# 安装：
+#     python -m pip install -r server/requirements.txt
+#
+# 版本下限取自本项目实际验证过的环境（fastapi 0.141.1 / uvicorn 0.53.0 /
+# numpy 2.5.3 / soundfile 0.14.0 / python-multipart 0.0.32）。
+fastapi>=0.110
+uvicorn>=0.27
+numpy>=1.24
+soundfile>=0.12
+# FastAPI 处理 UploadFile / File(...) 时必须要有它，否则启动即报错
+python-multipart>=0.0.9

@@ -1,0 +1,37 @@
+                    GNU AFFERO GENERAL PUBLIC LICENSE
+                       Version 3, 19 November 2007
+
+Copyright (c) 2026 kirara (Original Author)
+Copyright (c) 2026 xiaoxiongweihu (Second Modifier)
+Copyright (c) 2026 Thirteen-Moons (Third Modifier)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+================================================================================
+ADDITIONAL ATTRIBUTION NOTICE (Pursuant to AGPLv3 Section 7(b))
+================================================================================
+
+This project is derived from st-indextts2, originally authored by kirara and initially released under the MIT License.
+Substantial subsequent modifications were contributed by:
+1. xiaoxiongweihu (2026)
+2. Thirteen-Moons (2026)
+
+Mandatory attribution rules for all modified, distributed, or deployed derivative works:
+1. For kirara (Original Author) and xiaoxiongweihu (Second Modifier):
+   Full credit and attribution must be retained within this LICENSE file at minimum.
+2. For Thirteen-Moons (Third Modifier):
+   Explicit, prominent credit and attribution to Thirteen-Moons is required in:
+   - This LICENSE file
+   - Project README / documentation
+   - All public community posts, release announcements and project showcase pages

@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Breeze TTS 2 · 工作台</title>
+<style>
+  :root { --bd:#2b3a55; --bg:#0f172a; --card:#16233b; --fg:#e6edf7; --mut:#8fa3bf;
+          --ok:#3fb950; --warn:#d29922; --err:#f85149; --acc:#4c8dff; --acc2:#7c5cff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.6 "Segoe UI","Microsoft YaHei",system-ui,sans-serif; }
+  header { padding:14px 22px; border-bottom:1px solid var(--bd); display:flex;
+           align-items:center; gap:14px; flex-wrap:wrap; position:sticky; top:0;
+           background:var(--bg); z-index:10; }
+  h1 { margin:0; font-size:16px; font-weight:600; }
+  .pill { padding:3px 10px; border-radius:99px; font-size:12px; border:1px solid var(--bd); }
+  .pill.ok { color:var(--ok); border-color:var(--ok); }
+  .pill.bad { color:var(--err); border-color:var(--err); }
+  nav { display:flex; gap:6px; margin-left:auto; }
+  nav button { background:transparent; border:1px solid var(--bd); color:var(--mut);
+               padding:6px 16px; border-radius:8px; cursor:pointer; font:inherit; }
+  nav button.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  main { padding:18px 22px 80px; max-width:1080px; }
+  section { background:var(--card); border:1px solid var(--bd); border-radius:12px;
+            padding:16px 18px; margin-bottom:16px; }
+  section[hidden] { display:none; }
+  h2 { margin:0 0 12px; font-size:15px; font-weight:600; }
+  h3 { margin:18px 0 8px; font-size:13.5px; color:var(--mut); font-weight:600; }
+  .hint { color:var(--mut); font-size:12.5px; }
+  label { display:block; font-size:12.5px; color:var(--mut); margin:10px 0 4px; }
+  input[type=text], input[type=number], textarea, select {
+    width:100%; background:#0c1526; color:var(--fg); border:1px solid var(--bd);
+    border-radius:8px; padding:8px 10px; font:inherit; }
+  textarea { min-height:76px; resize:vertical; }
+  button { background:var(--acc); color:#fff; border:0; border-radius:8px;
+           padding:8px 16px; font:inherit; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--bd); color:var(--fg); }
+  button.danger { background:transparent; border:1px solid var(--err); color:var(--err); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+  .row > * { flex:0 0 auto; }
+  .row .grow { flex:1 1 200px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .chips button { background:transparent; border:1px solid var(--bd); color:var(--mut);
+                  padding:3px 10px; border-radius:99px; font-size:12px; }
+  .chips button:hover { color:var(--fg); border-color:var(--acc); }
+  .card { background:#0c1526; border:1px solid var(--bd); border-radius:10px;
+          padding:12px; margin-top:10px; }
+  audio { width:100%; margin-top:8px; }
+  .vo { display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+        padding:9px 0; border-bottom:1px solid rgba(255,255,255,.05); }
+  .vo .nm { font-family:Consolas,monospace; font-size:12.5px; min-width:180px; }
+  .vo .meta { color:var(--mut); font-size:12px; }
+  .tag-h { margin:16px 0 4px; font-size:13px; color:var(--acc2); font-weight:600; }
+  .bad { color:var(--err); } .warn { color:var(--warn); } .good { color:var(--ok); }
+  #toast { position:fixed; right:18px; bottom:18px; display:flex; flex-direction:column;
+           gap:8px; z-index:99; }
+  .toast { background:var(--card); border:1px solid var(--bd); border-left:3px solid var(--acc);
+           padding:10px 14px; border-radius:8px; max-width:400px; box-shadow:0 6px 20px #0007; }
+  .toast.err { border-left-color:var(--err); } .toast.ok { border-left-color:var(--ok); }
+  .hist { display:flex; gap:10px; align-items:center; padding:6px 0;
+          border-bottom:1px solid rgba(255,255,255,.05); font-size:12.5px; }
+  .hist .t { color:var(--mut); min-width:58px; }
+  .hist .x { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .spin { display:inline-block; width:12px; height:12px; border:2px solid #fff5;
+          border-top-color:#fff; border-radius:50%; animation:sp .7s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Breeze TTS 2 · 工作台</h1>
+  <span class="pill" id="be">检测中…</span>
+  <span class="pill" id="vc">—</span>
+  <nav>
+    <button data-tab="synth" class="on">合成</button>
+    <button data-tab="design">声音设计</button>
+    <button data-tab="lib">音色库</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ================= 合成 ================= -->
+  <section id="tab-synth">
+    <h2>合成语音</h2>
+    <label>音色</label>
+    <select id="s-voice"></select>
+    <label>台词</label>
+    <textarea id="s-text">今天下午的阳光很好，我们沿着河边慢慢走了一段路。</textarea>
+    <label>情感描述（决定「怎么说」）</label>
+    <textarea id="s-instr" placeholder="留空则用该音色的默认指令">用平静自然的语气说话，语速适中。</textarea>
+    <div class="chips" id="s-presets"></div>
+    <div class="row" style="margin-top:14px">
+      <div><label>cfg（越大情绪越强）</label><input type="number" id="s-cfg" value="4" step="0.5" min="1" max="10" style="width:110px"></div>
+      <div><label>seed</label><input type="number" id="s-seed" value="42" style="width:110px"></div>
+      <div class="grow"></div>
+      <button id="s-go">生成</button>
+    </div>
+    <div id="s-out"></div>
+    <h3>本次会话历史</h3>
+    <div id="s-hist" class="hint">还没有生成记录</div>
+  </section>
+
+  <!-- ================= 声音设计 ================= -->
+  <section id="tab-design" hidden>
+    <h2>声音设计（不需要参考音频）</h2>
+    <p class="hint">用一句描述凭空造一个音色。满意后再保存进音色库——保存时会连同试听文本一起写成逐字稿。</p>
+    <label>① 音色描述 —— 这个声音「是什么样」</label>
+    <textarea id="d-instr" placeholder="例：一位四十多岁的中年男性，声音醇厚低沉，吐字清晰。"></textarea>
+    <div class="chips" id="d-presets"></div>
+
+    <label>② 情感描述 —— 这段试听「怎么说」</label>
+    <textarea id="d-emo" style="min-height:52px">情绪平稳，语速自然，不带明显起伏。</textarea>
+    <div class="chips" id="d-emo-presets"></div>
+    <p class="hint" style="margin:6px 0 0">
+      参考音频会作为克隆样本长期使用，<strong>建议保持平稳</strong>——
+      带情绪的样本会把那种情绪传染给之后由它生成的每一句话。
+      想给某个角色加情绪，应该在「合成」页写情感描述，而不是在这里。
+    </p>
+
+    <label>③ 试听文本（会被保存为该音色的逐字稿，务必与音频一致）</label>
+    <textarea id="d-text">今天下午的阳光很好，我们沿着河边慢慢走了一段路，顺便聊了聊最近发生的事情。</textarea>
+    <div class="row" style="margin-top:14px">
+      <div><label>cfg</label><input type="number" id="d-cfg" value="4" step="0.5" min="1" max="10" style="width:110px"></div>
+      <div><label>seed</label><input type="number" id="d-seed" value="42" style="width:110px"></div>
+      <div class="grow"></div>
+      <button id="d-go">生成试听</button>
+    </div>
+    <div id="d-out"></div>
+    <div class="card" id="d-savebox" hidden>
+      <div class="row">
+        <div class="grow"><label>保存到标签文件夹</label><select id="d-tag"></select></div>
+        <div class="grow"><label>文件名</label><input type="text" id="d-name" placeholder="如 中年男声03"></div>
+        <button id="d-save">保存到音色库</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0">同名会自动加随机后缀，不会覆盖已有音色。</p>
+    </div>
+  </section>
+
+  <!-- ================= 音色库 ================= -->
+  <section id="tab-lib" hidden>
+    <h2>音色库</h2>
+    <p class="hint">
+      标签来自文件夹名。放音频进 <code>plugin\voices\&lt;标签&gt;\</code> 即可，逐字稿用同名 <code>.txt</code>。
+      根目录（无标签）的音色不参与 NPC 自动分配。
+    </p>
+    <div class="card">
+      <h3 style="margin-top:0">上传参考音频</h3>
+      <div class="row">
+        <div class="grow"><label>文件</label><input type="file" id="u-file" accept="audio/*"></div>
+        <div class="grow"><label>标签</label><select id="u-tag"></select></div>
+        <div class="grow"><label>文件名（可留空）</label><input type="text" id="u-name"></div>
+      </div>
+      <label>逐字稿（必须与音频完全一致）</label>
+      <textarea id="u-text" style="min-height:52px"></textarea>
+      <div class="row" style="margin-top:10px"><button id="u-go">上传</button></div>
+    </div>
+    <div id="lib-list"></div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+let TAGS = [], VOICES = [], lastDesign = null;
+
+function toast(msg, kind = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.textContent = msg;
+  $('#toast').appendChild(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    let d = res.statusText;
+    try { d = (await res.json()).detail || d; } catch {}
+    throw new Error(d);
+  }
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('json') ? res.json() : res;
+}
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+const vurl = id => '/voices/' + encodeURIComponent(id) + '/audio';
+
+// ---------------------------------------------------------------- 标签 / 音色
+async function loadTags() {
+  const d = await api('/api/v1/tags');
+  TAGS = d.tags;
+  return d;
+}
+
+async function loadVoices() {
+  const d = await api('/voices');
+  VOICES = d.voices || [];
+  $('#vc').textContent = VOICES.length + ' 个音色';
+  // 合成页：按标签分组
+  const groups = {};
+  VOICES.forEach(v => { (groups[v.tag || '（无标签）'] ||= []).push(v); });
+  const opts = Object.keys(groups).sort((a, b) =>
+    (a === '（无标签）' ? 1 : 0) - (b === '（无标签）' ? 1 : 0) || a.localeCompare(b, 'zh'))
+    .map(g => `<optgroup label="${esc(g)}">` + groups[g].map(v =>
+      `<option value="${esc(v.filename)}"${v.ready ? '' : ' disabled'}>` +
+      `${esc(v.filename)}${v.ready ? '' : '（缺逐字稿）'}</option>`).join('') + '</optgroup>').join('');
+  const sel = $('#s-voice'), prev = sel.value;
+  sel.innerHTML = opts || '<option value="">（音色库为空）</option>';
+  if (prev && VOICES.some(v => v.filename === prev)) sel.value = prev;
+
+  const tagOpts = '<option value="">（根目录 / 无标签）</option>' +
+    TAGS.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  ['#d-tag', '#u-tag'].forEach(s => { const el = $(s); const p = el.value; el.innerHTML = tagOpts; el.value = p; });
+
+  renderLib();
+  return d;
+}
+
+// ---------------------------------------------------------------- 合成
+// 音色描述预设：描述「声音本身」（用于声音设计页）
+const VOICE_PRESETS = [
+  ['中年男声', '一位四十多岁的中年男性，声音醇厚低沉，吐字清晰。'],
+  ['青年男声', '一位二十多岁的年轻男性，声音清朗干净，中气充足，吐字清晰。'],
+  ['少年', '一个十四五岁的少年，声音清亮、尚未完全变声，吐字清晰。'],
+  ['小男孩', '一个七八岁的小男孩，声音清脆稚嫩，天真自然，吐字清楚。'],
+  ['老者', '一位年近七旬的老者，声音苍老而沙哑，语速缓慢，气息平稳。'],
+  ['青年女声', '一位二十多岁的年轻女性，声音清亮柔和，吐字清晰。'],
+  ['少女', '一个十四五岁的少女，声音清亮明快，吐字清晰。'],
+  ['中年女声', '一位四十多岁的女性，声音温厚沉稳，吐字清晰。'],
+  ['老婆婆', '一位年近七旬的老妇人，声音苍老温缓，语速缓慢，吐字清楚。'],
+  ['中性嗓音', '一种中性、不带明显性别特征的嗓音，音色平静，吐字清晰。'],
+  ['播音腔', '一位声音浑厚标准的成年男性，吐字饱满有力，如同新闻播音员。'],
+  ['气声耳语', '一种轻柔的气声嗓音，音量偏小，像贴着耳朵低语。'],
+];
+
+// 情感描述预设：描述「怎么说」（用于合成页，也可用于设计页的试听）
+const PRESETS = [
+  ['平静', '用平静自然的语气说话，语速适中，情绪平稳。'],
+  ['开心', '用开心愉悦的语气说话，语调轻快上扬，带着笑意，充满活力。'],
+  ['伤心', '用伤心低落的语气说话，语速缓慢，声音低沉，带着难过和失落。'],
+  ['愤怒', '用愤怒生气的语气说话，语气强烈，语速偏快，情绪激动。'],
+  ['温柔', '用温柔亲切的语气说话，语速舒缓，声音柔和。'],
+  ['严肃', '用严肃沉稳的语气说话，语速平稳，字字清晰。'],
+  ['慵懒', '用慵懒随意的语气说话，语速偏慢，略带倦意。'],
+  ['紧张', '用紧张不安的语气说话，语速偏快，声音发紧。'],
+];
+
+function renderPresets(host, target, list = PRESETS) {
+  host.innerHTML = list.map(([n]) => `<button data-n="${esc(n)}">${esc(n)}</button>`).join('');
+  $$('button', host).forEach(b => b.onclick = () => {
+    const p = list.find(x => x[0] === b.dataset.n);
+    $(target).value = p[1];
+  });
+}
+
+function showAudio(host, blob, meta) {
+  const url = URL.createObjectURL(blob);
+  host.innerHTML = `<div class="card">
+      <div class="hint">${esc(meta)}</div>
+      <audio controls autoplay src="${url}"></audio>
+      <div class="row" style="margin-top:8px">
+        <a download="breeze.wav" href="${url}"><button class="ghost">下载 WAV</button></a>
+      </div>
+    </div>`;
+  host.querySelector('audio').onloadedmetadata = e => {
+    const s = e.target.duration;
+    if (s) host.querySelector('.hint').textContent += `  ·  ${s.toFixed(2)}s`;
+  };
+}
+
+const hist = [];
+function renderHist() {
+  const el = $('#s-hist');
+  if (!hist.length) { el.innerHTML = '<span class="hint">还没有生成记录</span>'; return; }
+  el.innerHTML = hist.map((h, i) => `<div class="hist">
+      <span class="t">${h.t}</span>
+      <span class="x" title="${esc(h.text)}">${esc(h.text)}</span>
+      <span class="hint">${esc(h.voice)}</span>
+      <audio controls preload="none" src="${h.url}" style="width:230px;margin:0"></audio>
+    </div>`).join('');
+}
+
+$('#s-go').onclick = async () => {
+  const voice = $('#s-voice').value, text = $('#s-text').value.trim();
+  if (!voice) return toast('请先选择音色', 'err');
+  if (!text) return toast('台词不能为空', 'err');
+  const btn = $('#s-go'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 生成中';
+  const t0 = performance.now();
+  try {
+    const res = await api('/tts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, prompt_audio: voice,
+        instruction: $('#s-instr').value.trim(),
+        guidance_scale: Number($('#s-cfg').value), seed: Number($('#s-seed').value) })
+    });
+    const blob = await res.blob();
+    const ms = Math.round(performance.now() - t0);
+    showAudio($('#s-out'), blob, `${voice}  ·  cfg ${$('#s-cfg').value}  ·  ${ms} ms`);
+    hist.unshift({ t: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                   text, voice, url: URL.createObjectURL(blob) });
+    if (hist.length > 20) { const x = hist.pop(); URL.revokeObjectURL(x.url); }
+    renderHist();
+  } catch (e) { toast('生成失败: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = '生成'; }
+};
+
+// ---------------------------------------------------------------- 声音设计
+$('#d-go').onclick = async () => {
+  const voiceDesc = $('#d-instr').value.trim();
+  const emoDesc = $('#d-emo').value.trim();
+  const text = $('#d-text').value.trim();
+  if (!voiceDesc) return toast('请填写音色描述', 'err');
+  if (!text) return toast('试听文本不能为空', 'err');
+  // Breeze 的 /design 只收一个 instruction，把音色与情感拼起来
+  const instruction = emoDesc ? `${voiceDesc}。${emoDesc}` : voiceDesc;
+  const btn = $('#d-go'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 生成中';
+  try {
+    const res = await api('/design', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, instruction,
+        guidance_scale: Number($('#d-cfg').value), seed: Number($('#d-seed').value) })
+    });
+    lastDesign = await res.blob();
+    showAudio($('#d-out'), lastDesign,
+      `声音设计  ·  cfg ${$('#d-cfg').value}  ·  ${voiceDesc.slice(0, 18)}${voiceDesc.length > 18 ? '…' : ''}`);
+    $('#d-savebox').hidden = false;
+  } catch (e) { toast('生成失败: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = '生成试听'; }
+};
+
+$('#d-save').onclick = async () => {
+  if (!lastDesign) return toast('请先生成试听', 'err');
+  const tag = $('#d-tag').value, name = $('#d-name').value.trim();
+  if (!name) return toast('请填写文件名', 'err');
+  const fd = new FormData();
+  fd.append('file', lastDesign, name + '.wav');
+  fd.append('tag', tag); fd.append('name', name);
+  fd.append('ref_text', $('#d-text').value.trim());
+  try {
+    const r = await api('/api/v1/upload', { method: 'POST', body: fd });
+    toast(`已保存：${r.filename}`, 'ok');
+    if (r.warning) toast(r.warning, 'err');
+    $('#d-savebox').hidden = true; lastDesign = null;
+    await loadVoices();
+  } catch (e) { toast('保存失败: ' + e.message, 'err'); }
+};
+
+// ---------------------------------------------------------------- 音色库
+function renderLib() {
+  const host = $('#lib-list');
+  if (!VOICES.length) { host.innerHTML = '<p class="hint">音色库为空。</p>'; return; }
+  const groups = {};
+  VOICES.forEach(v => { (groups[v.tag || ''] ||= []).push(v); });
+  const order = ['', ...TAGS].filter(t => groups[t]);
+  host.innerHTML = order.map(tag => {
+    const list = groups[tag].map(v => {
+      const db = v.rms_dbfs;
+      const lc = db > -14 ? 'warn' : db < -30 ? 'warn' : 'good';
+      return `<div class="vo" data-id="${esc(v.filename)}">
+        <div class="nm">${esc(v.filename)}</div>
+        <div class="meta">${v.duration_s.toFixed(1)}s · <span class="${lc}">${db} dBFS</span></div>
+        <span class="meta ${v.ready ? 'good' : 'bad'}">${v.ready ? '有稿' : '缺稿'}</span>
+        <button class="ghost pv">试听</button>
+        <button class="danger mv">改标签</button>
+        <button class="danger del">删除</button>
+        <audio class="prev" controls preload="none" style="display:none;width:100%"></audio>
+      </div>
+      <div style="padding:0 0 10px"><textarea data-rt="${esc(v.filename)}" style="min-height:48px"
+        placeholder="逐字稿（Breeze 克隆必需）">${esc(v.ref_text)}</textarea>
+        <div class="row" style="margin-top:6px"><button class="ghost sv">保存逐字稿</button></div></div>`;
+    }).join('');
+    return `<div class="tag-h">${esc(tag || '（根目录 / 无标签 · 不参与 NPC 分配）')}
+      <span class="hint">${groups[tag].length} 个</span></div>${list}`;
+  }).join('');
+
+  $$('.vo').forEach(row => {
+    const id = row.dataset.id;
+    row.querySelector('.pv').onclick = () => {
+      const a = row.nextElementSibling.querySelector('audio') ||
+                row.parentElement.querySelector('audio.prev');
+      const au = row.querySelector('.prev');
+      au.src = vurl(id) + '?t=' + Date.now(); au.style.display = 'block'; au.play().catch(() => {});
+    };
+    row.querySelector('.mv').onclick = async () => {
+      const tag = prompt(`把 ${id} 移到哪个标签？\n可填：\n${TAGS.join('\n')}\n（留空 = 移回根目录）`, '');
+      if (tag === null) return;
+      try {
+        const r = await api('/voices/' + encodeURIComponent(id) + '/move', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tag: tag.trim() }) });
+        toast(r.moved ? `已移动到 ${tag || '根目录'}` : '位置未变', 'ok');
+        await loadVoices();
+      } catch (e) { toast('移动失败: ' + e.message, 'err'); }
+    };
+    row.querySelector('.del').onclick = async () => {
+      if (!confirm(`删除 ${id} ？（音频与元数据一并删除）`)) return;
+      try { await api('/voices/' + encodeURIComponent(id), { method: 'DELETE' });
+            toast('已删除', 'ok'); await loadVoices(); }
+      catch (e) { toast('删除失败: ' + e.message, 'err'); }
+    };
+  });
+  $$('textarea[data-rt]').forEach(ta => {
+    const id = ta.dataset.rt;
+    ta.parentElement.querySelector('.sv').onclick = async () => {
+      try {
+        await api('/voices/' + encodeURIComponent(id), {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref_text: ta.value }) });
+        toast('逐字稿已保存', 'ok'); await loadVoices();
+      } catch (e) { toast('保存失败: ' + e.message, 'err'); }
+    };
+  });
+}
+
+$('#u-go').onclick = async () => {
+  const f = $('#u-file').files[0];
+  if (!f) return toast('请选择文件', 'err');
+  const fd = new FormData();
+  fd.append('file', f, f.name);
+  fd.append('tag', $('#u-tag').value);
+  fd.append('name', $('#u-name').value.trim());
+  fd.append('ref_text', $('#u-text').value.trim());
+  try {
+    const r = await api('/api/v1/upload', { method: 'POST', body: fd });
+    toast(`已上传：${r.filename}`, 'ok');
+    if (r.warning) toast(r.warning, 'err');
+    if (!r.has_transcript) toast('还没填逐字稿，该音色暂时无法用于克隆', 'err');
+    $('#u-file').value = ''; $('#u-text').value = ''; $('#u-name').value = '';
+    await loadVoices();
+  } catch (e) { toast('上传失败: ' + e.message, 'err'); }
+};
+
+// ---------------------------------------------------------------- 启动
+$$('nav button').forEach(b => b.onclick = () => {
+  $$('nav button').forEach(x => x.classList.toggle('on', x === b));
+  ['synth', 'design', 'lib'].forEach(t => { $('#tab-' + t).hidden = (t !== b.dataset.tab); });
+});
+
+async function refreshHealth() {
+  try {
+    const h = await api('/health');
+    const be = $('#be');
+    be.textContent = h.backend_ok ? '后端正常' : '后端不可用';
+    be.className = 'pill ' + (h.backend_ok ? 'ok' : 'bad');
+  } catch { $('#be').textContent = 'sidecar 异常'; $('#be').className = 'pill bad'; }
+}
+
+(async () => {
+  renderPresets($('#s-presets'), '#s-instr', PRESETS);
+  renderPresets($('#d-presets'), '#d-instr', VOICE_PRESETS);
+  renderPresets($('#d-emo-presets'), '#d-emo', PRESETS);
+  renderHist();
+  await refreshHealth();
+  try { await loadTags(); await loadVoices(); }
+  catch (e) { toast('加载音色库失败: ' + e.message, 'err'); }
+  setInterval(refreshHealth, 20000);
+})();
+</script>
+</body>
+</html>
