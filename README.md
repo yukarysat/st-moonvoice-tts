@@ -1,4 +1,4 @@
-# 弦歌 · ST-Xiange-Player
+# 月声 · ST-MoonVoice
 
 给 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 用的朗读插件，为 **[Breeze TTS 2](https://github.com/breezeblue-ai/breeze-tts)** 适配。
 
@@ -71,16 +71,16 @@
 
 ```bash
 cd <SillyTavern>/public/scripts/extensions/third-party
-git clone <本仓库地址> ST-Xiange-Player
+git clone <本仓库地址> ST-MoonVoice
 ```
 
-目录名必须是 `ST-Xiange-Player`——SillyTavern 按文件夹发现扩展，而插件内部用它定位自己。
-重启 SillyTavern 后，在扩展列表里应能看到「古木兆月:弦歌」。
+目录名必须是 `ST-MoonVoice`——SillyTavern 按文件夹发现扩展，而插件内部用它定位自己。
+重启 SillyTavern 后，在扩展列表里应能看到「古木兆月:月声-TTS」。
 
 ### 2. 跑侧车
 
 ```bash
-cd ST-Xiange-Player/server
+cd ST-MoonVoice/server
 python -m pip install -r requirements.txt
 python breeze_api.py
 ```
@@ -283,7 +283,7 @@ Breeze 后端加载模型本身要十几秒（第一次请求会慢），之后�
 ## 仓库结构
 
 ```
-ST-Xiange-Player/
+ST-MoonVoice/
 ├─ manifest.json            SillyTavern 扩展清单
 ├─ index.js                 扩展主体（解析、播放、面板、悬浮播放器）
 ├─ style.css

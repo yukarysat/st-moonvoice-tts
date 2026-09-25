@@ -1,4 +1,4 @@
-"""Breeze TTS 2 sidecar for the SillyTavern plugin ST-Xiange-Player.
+"""Breeze TTS 2 sidecar for the SillyTavern plugin ST-MoonVoice.
 
 Responsibilities
   * voice library on disk        voices/<id>.wav + voices/<id>.json

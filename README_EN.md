@@ -1,4 +1,4 @@
-# Xiange (ST-Xiange-Player)
+# MoonVoice (ST-MoonVoice)
 
 A read-aloud extension for [SillyTavern](https://github.com/SillyTavern/SillyTavern), adapted for **[Breeze TTS 2](https://github.com/breezeblue-ai/breeze-tts)**.
 
@@ -54,16 +54,16 @@ The sidecar is kept deliberately thin (`fastapi / uvicorn / numpy / soundfile / 
 
 ```bash
 cd <SillyTavern>/public/scripts/extensions/third-party
-git clone <this-repo-url> ST-Xiange-Player
+git clone <this-repo-url> ST-MoonVoice
 ```
 
-The directory **must** be named `ST-Xiange-Player`: SillyTavern discovers extensions by folder, and the extension uses that name to locate itself.
-Restart SillyTavern; it should appear in the extension list as 「古木兆月:弦歌」.
+The directory **must** be named `ST-MoonVoice`: SillyTavern discovers extensions by folder, and the extension uses that name to locate itself.
+Restart SillyTavern; it should appear in the extension list as 「古木兆月:月声-TTS」.
 
 ### 2. Run the sidecar
 
 ```bash
-cd ST-Xiange-Player/server
+cd ST-MoonVoice/server
 python -m pip install -r requirements.txt
 python breeze_api.py                 # listens on 127.0.0.1:7881, forwards to 127.0.0.1:7870
 python breeze_api.py --backend http://127.0.0.1:7870
@@ -159,7 +159,7 @@ netsh advfirewall firewall add rule name="BreezeTTS2-7881-LAN" ^
 ## Repository layout
 
 ```
-ST-Xiange-Player/
+ST-MoonVoice/
 ├─ manifest.json            SillyTavern extension manifest
 ├─ index.js                  extension core (parsing, playback, panels, floating player)
 ├─ style.css
