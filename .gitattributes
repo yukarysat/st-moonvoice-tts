@@ -4,6 +4,15 @@
 # 于是 git diff 出现整文件变动，真正的改动被淹没。
 * text=auto eol=lf
 
+# Windows 批处理保持 CRLF。
+# cmd.exe 解析 LF-only 的 .cmd 时，带括号的 if 块和 goto/标签会出现怪异行为，
+# 所以这类文件不能跟着上面的 eol=lf 走。
+*.cmd -text
+*.bat -text
+
+# 面向用户的纯文本说明保持 CRLF：它是给记事本打开的
+*.txt text eol=crlf
+
 # 二进制/资源文件不做任何转换
 *.png binary
 *.jpg binary
@@ -17,3 +26,5 @@
 *.flac binary
 *.gguf binary
 *.safetensors binary
+*.exe binary
+*.dll binary

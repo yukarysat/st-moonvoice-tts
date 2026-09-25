@@ -1,0 +1,12 @@
+# 构建侧车单文件 exe 所需的依赖（运行侧车本身不需要这些）
+#
+# 安装：
+#     uv pip install --python <venv>\Scripts\python.exe -r requirements-build.txt
+#   或 python -m pip install -r requirements-build.txt
+#
+# 然后构建（在 server\ 目录下）：
+#     build-exe.cmd
+#
+# 版本下限取自本项目实际验证过的环境（PyInstaller 6.22.3 +
+# pyinstaller-hooks-contrib 2026.7，后者提供 uvicorn 的钩子）。
+pyinstaller>=6.10

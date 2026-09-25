@@ -39,16 +39,42 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-# HERE = 代码所在目录。webui.html / manage.html 这类随代码分发的资源在它下面找。
-HERE = Path(__file__).resolve().parent
+def _is_frozen() -> bool:
+    """是否运行在 PyInstaller 打出来的 exe 里。"""
+    return bool(getattr(sys, "frozen", False))
+
+
+def _asset_dir() -> Path:
+    """资源目录：webui.html / manage.html 这类随代码分发的文件在这里找。
+
+    PyInstaller 单文件模式下 __file__ 指向临时解包目录（sys._MEIPASS），
+    所以必须走 _MEIPASS，不能靠 __file__ 的父目录。
+    """
+    if _is_frozen():
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    return Path(__file__).resolve().parent
+
+
+def _exe_dir() -> Path:
+    """程序自身所在目录：数据目录的默认值。
+
+    冻结后必须用 sys.executable 的父目录 —— 那是用户解压出来的真实位置。
+    若沿用 _MEIPASS，voices/ 与 pjy/ 会被写进临时目录，程序一退出就没了。
+    """
+    if _is_frozen():
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+HERE = _asset_dir()
+DATA_DEFAULT = _exe_dir()
 
 
 def _resolve_data_dir() -> Path:
     """数据目录（voices/ 与 pjy/ 的父目录）。
 
-    默认就是代码所在目录，与旧行为完全一致。
-    用 --data-dir 或环境变量 BREEZE_DATA_DIR 可以把它指到别处 —— 这样代码可以只留一份
-    （放仓库里），而音色库和场景音效留在原地，不必跟着代码搬家。
+    优先级：--data-dir 参数 > 环境变量 BREEZE_DATA_DIR > 程序所在目录。
+    不传参数时就是程序所在目录，与旧行为一致。
 
     必须在模块加载期就解析出来：VOICES_DIR / SCENE_AUDIO_DIR 是模块级常量，
     下面有几十处引用它们，等到 main() 里再解析就太晚了。
@@ -62,7 +88,7 @@ def _resolve_data_dir() -> Path:
     env = os.environ.get("BREEZE_DATA_DIR")
     if env:
         return Path(env).expanduser().resolve()
-    return HERE
+    return DATA_DEFAULT
 
 
 DATA_DIR = _resolve_data_dir()

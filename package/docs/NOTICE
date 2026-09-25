@@ -1,0 +1,88 @@
+月声 MoonVoice 整合包 —— 第三方组件与许可通告
+================================================================
+
+本整合包包含以下第三方组件，各自适用其自身许可。
+
+
+1. Breeze TTS 2 模型权重
+----------------------------------------------------------------
+
+Breeze TTS 2 is licensed under the BreezeBlue Research and
+Non-Commercial License Agreement. Copyright (c) 2026 RESONIA, INC.
+All Rights Reserved.
+
+Derived from Breeze TTS 2 by BreezeBlue and licensed for research and
+non-commercial use only.
+
+  许可方         RESONIA, INC.（d/b/a BreezeBlue）
+  完整条款       见同目录 LICENSE-Breeze-TTS-2
+  商用授权询问   https://breezeblue.ai    contact@breeze.blue
+
+  只允许研究与个人非商业用途。本许可不是开源许可，不授予任何商业权利；
+  商业使用须另行取得书面授权。本许可不含创作者例外、内容变现例外、
+  小企业例外或收入阈值例外。付费订阅只授予其托管平台产出的商用权，
+  不适用于本整合包（自托管）。
+
+  本包内的模型文件取自第三方量化仓库：
+      https://huggingface.co/audio-cpp/audio.cpp-gguf
+      路径  Breeze-TTS-2-GGUF/breeze-tts-2-bf16.gguf
+  该仓库在其同目录下提供了上游 LICENSE 与 NOTICE，本包一并沿用并保留。
+
+  量化产物属于原许可第 1.3 条定义的「Derivative Model」，
+  因此同样受该许可约束。修改与量化情况已在上述来源中标明。
+
+  免责声明：本整合包仅以描述性方式提及 BreezeBlue 与 Breeze TTS 2
+  以标明来源与兼容性，不表示任何隶属、赞助、官方或后继关系；
+  未使用其名称作为本产品的主名称。
+
+
+2. audio.cpp 推理运行时
+----------------------------------------------------------------
+
+  Copyright 2026 ShugoAI LLC
+  Licensed under the Apache License, Version 2.0
+  完整条款见  backend\runtime\LICENSE
+
+  随附的 CUDA 相关动态库（cublas / cudart / cufft 等）为 NVIDIA
+  版权所有，适用 NVIDIA 自身的许可条款。
+
+
+3. audio tokenizer（模型内置组件）
+----------------------------------------------------------------
+
+  基于 Alibaba Qwen Team 的 Qwen3-TTS，
+  Licensed under the Apache License, Version 2.0。
+
+
+4. 月声侧车服务（sidecar\moonvoice-sidecar.exe）
+----------------------------------------------------------------
+
+  作者原创代码，不包含上述组件的代码。
+  源码以 AGPL-3.0 随插件仓库一并提供，可自行审查或自行重建：
+      <插件仓库>/server/breeze_api.py
+      <插件仓库>/server/moonvoice-sidecar.spec
+      <插件仓库>/server/build-exe.cmd
+
+
+5. 酒馆插件（本整合包不包含，请另行安装）
+----------------------------------------------------------------
+
+  ST-MoonVoice，AGPL-3.0。
+  派生自 Thirteen-Moons 的 ST-indexTTS2-X-Player，
+  其上游为 kirara 的 st-indextts-player（最初以 MIT 发布），
+  并经 xiaoxiongweihu 与 Thirteen-Moons 实质性改造。
+
+  依 AGPLv3 §7(b) 附加的署名条款，对 Thirteen-Moons 的署名必须明确
+  且醒目地出现在 LICENSE、项目文档，以及**所有公开发布帖、发布公告
+  与项目展示页**。请勿在转发或二次分发时删除该署名。
+
+
+================================================================
+完整许可文本所在位置
+================================================================
+
+  文档\LICENSE-Breeze-TTS-2        模型：BreezeBlue 研究与非商业许可
+  backend\runtime\LICENSE          audio.cpp 运行时：Apache-2.0
+
+本整合包整体依 BreezeBlue 研究与非商业许可分发（因其包含模型权重），
+且未附加与该许可冲突或削弱其保护的条款。
