@@ -67,11 +67,106 @@ REQUIRED = [
     "backend/server.json",
     "backend/models/Breeze-TTS-2-GGUF/breeze-tts-2-bf16.gguf",
     "sidecar/moonvoice-sidecar.exe",
-    "data",
+    # 随包样例音色：解压就有声音可用
+    "data/voices/_说明.txt",
+    "data/voices/女-少年/女少03.wav",
+    "data/voices/女-少年/女少03.txt",
+    "data/voices/男-青年/男青01.wav",
+    # 场景音效刻意不带，只放说明
+    "data/pjy/_说明.txt",
+    "data/pjy/环境音效",
+    "data/pjy/事件音效",
     "文档/使用说明.md",
     "文档/NOTICE",
     "文档/LICENSE-Breeze-TTS-2",
 ]
+
+
+def _note(text: str) -> bytes:
+    """面向用户的说明文件：UTF-8 带 BOM + CRLF，记事本双击即可正确显示。"""
+    body = text.replace("\r\n", "\n").replace("\n", "\r\n")
+    return b"\xef\xbb\xbf" + body.encode("utf-8")
+
+
+VOICES_NOTE = _note("""这个文件夹是音色库（含开箱样例）
+================================================================
+
+11 个子文件夹对应 11 个「性别-年龄段」标签，共附带 22 个样例音色。
+它们是随整合包一起提供的，方便你解压后立刻就能听到声音，
+不必先自己录一段参考音频。
+
+这些样例由 Breeze TTS 2 以「语音设计」方式生成，不是真人录音。
+
+
+你可以做的事
+----------------------------------------------------------------
+
+* 直接用：酒馆里不用配置任何东西就能出声
+* 换成你自己的声音：把参考音频放进对应标签的文件夹，文件名随意
+* 加自己的音色：参考音频 + 同名 .txt 逐字稿
+* 删掉样例：直接删文件即可，不影响运行
+
+
+逐字稿是硬性要求
+----------------------------------------------------------------
+Breeze 靠「参考音频 + 逐字稿」来克隆音色，没有逐字稿的音色无法使用。
+样例音色都已经配好同名 .txt，你自己加音色时别忘了一起放。
+
+逐字稿的内容必须和音频里说的话逐字一致（含语气词），
+差一个字都会明显拉低相似度。
+
+
+标签的含义
+----------------------------------------------------------------
+    男-儿童 / 男-少年 / 男-青年 / 男-中年 / 男-老年
+    女-儿童 / 女-少年 / 女-青年 / 女-中年 / 女-老年
+    中性-未定
+
+大模型写台词时会标注角色属于哪一类，插件按标签自动挑音色。
+放在根目录（也就是本文件夹下）的音色没有标签，不参与自动分配，
+只供你在配音面板里手动绑定。
+
+详细规则见  文档\\使用说明.md
+""")
+
+
+PJY_NOTE = _note("""场景音效放在这里（本整合包刻意不附带任何音效）
+================================================================
+
+这个文件夹是空的，是有意为之 —— 请你自行放入有明确授权的音频。
+
+
+为什么不自带
+----------------------------------------------------------------
+制作整合包时检查过手头可用的素材，发现其中含有商业版权内容
+（有一个音效文件的版权字段明确写着 Sony Pictures Entertainment）。
+这类文件在所谓"免费音效"站点上很常见，但版权仍归原权利人，
+随包分发会构成侵权。
+
+其余文件虽然查不出处，但同样无法证明可以自由分发。
+所以本整合包一律不附带音效，把这个选择留给你。
+
+
+怎么放
+----------------------------------------------------------------
+    pjy\\环境音效\\    循环播放，换场景时淡入淡出
+    pjy\\事件音效\\    只响一次，叠在环境音之上（敲门、干杯这类）
+
+文件名必须和大模型在台词第三个方括号里写的名字一模一样，
+例如台词写 [雨声]，文件名就叫 雨声.wav。写 [] 就是停止环境音。
+
+支持 .mp3 / .wav / .ogg / .m4a / .aac / .flac
+名字对不上不会报错，只是那一段不播声音。
+
+
+去哪里找能自由使用的音效
+----------------------------------------------------------------
+* freesound.org   —— 筛选 License 为 Creative Commons 0 (CC0)，可自由使用
+* 自己录         —— 手机录一段环境声即可，完全没有版权问题
+* 用 CC-BY 素材时记得在发布物里署名（CC0 不需要）
+
+这里放的文件只在本机使用，插件和整合包都不会把它们上传到任何地方。
+""")
 
 
 def place(src: Path, dst: Path, link: bool, log: list[str]) -> None:
@@ -180,24 +275,46 @@ def main() -> int:
     print("--- 4) 侧车 ---")
     place(SIDECAR_EXE, TARGET / "sidecar" / SIDECAR_EXE.name, False, [])
 
-    print("--- 5) data（用户数据，留空） ---")
+    print("--- 5) data：目录骨架 ---")
     for d in ("data/voices", "data/pjy/环境音效", "data/pjy/事件音效"):
         (TARGET / d).mkdir(parents=True, exist_ok=True)
 
-    print("--- 6) 文档 ---")
+    print("--- 6) 样例音色（随包附带，让用户解压就能听到声音） ---")
+    voices_src = DEPLOY / "plugin" / "voices"
+    n_samples = 0
+    for f in sorted(voices_src.rglob("*")):
+        if not f.is_file():
+            continue
+        if f.name in ("_说明.md", "_说明.txt"):
+            continue
+        rel = f.relative_to(voices_src)
+        dst = TARGET / "data" / "voices" / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        # 复制而不是硬链接：让整合包里的样例与开发库互相独立，
+        # 避免用户在包里改动（或删除）时影响到开发库。
+        shutil.copy2(f, dst)
+        n_samples += 1
+    (TARGET / "data" / "voices" / "_说明.txt").write_bytes(VOICES_NOTE)
+    print(f"  附带 {n_samples} 个音色文件 + 说明")
+
+    print("--- 7) 场景音效：刻意不附带 ---")
+    (TARGET / "data" / "pjy" / "_说明.txt").write_bytes(PJY_NOTE)
+    print("  已放入说明（不附带任何音效文件）")
+
+    print("--- 8) 文档 ---")
     DOCS = TARGET / "文档"
     DOCS.mkdir(exist_ok=True)
     shutil.copy2(HERE / "docs" / "使用说明.md", DOCS / "使用说明.md")
     shutil.copy2(HERE / "docs" / "NOTICE", DOCS / "NOTICE")
     shutil.copy2(MODEL_LICENSE_SRC, DOCS / "LICENSE-Breeze-TTS-2")
 
-    print("--- 7) 启动脚本与说明（放到根目录，方便双击） ---")
+    print("--- 9) 启动脚本与说明（放到根目录，方便双击） ---")
     for f in sorted((HERE / "launchers").iterdir()):
         shutil.copy2(f, TARGET / f.name)
     shutil.copy2(HERE / "readme.txt", TARGET / "readme.txt")
 
     # ---- 校验 ----
-    print("\n--- 8) 校验必需文件 ---")
+    print("\n--- 10) 校验必需文件 ---")
     bad = [r for r in REQUIRED if not (TARGET / r).exists()]
     if bad:
         print("  [失败] 缺少：")
@@ -207,8 +324,8 @@ def main() -> int:
     print(f"  全部 {len(REQUIRED)} 项就位 [OK]")
 
     # ---- 体积 ----
-    print("\n--- 9) 体积 ---")
-    for d in ("backend/runtime", "backend/models", "sidecar", "文档", "data"):
+    print("\n--- 11) 体积 ---")
+    for d in ("backend/runtime", "backend/models", "sidecar", "data/voices", "data/pjy", "文档"):
         p = TARGET / d
         if p.exists():
             print(f"  {d:22} {dir_size(p) / 1048576:10.1f} MB")
@@ -217,7 +334,7 @@ def main() -> int:
 
     # ---- 可选打 zip ----
     if args.zip:
-        print(f"\n--- 10) 打包 {ZIP_PATH.name} ---")
+        print(f"\n--- 12) 打包 {ZIP_PATH.name} ---")
         if ZIP_PATH.exists():
             ZIP_PATH.unlink()
         with zipfile.ZipFile(ZIP_PATH, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
