@@ -112,7 +112,7 @@
                 return window.SillyTavern.getContext();
             }
         } catch (e) {
-            console.warn('[BreezeTTS2] 获取上下文失败:', e);
+            console.warn('[MoonVoice] 获取上下文失败:', e);
         }
         return null;
     }
@@ -168,7 +168,7 @@
                 .filter(v => !isNaN(v) && v > 0);
             if (legacy.length) {
                 active.segmentGap = Math.max(...legacy);
-                console.log(`[BreezeTTS2] 已把旧的按模式延迟迁移为音频间隔: ${active.segmentGap}s`);
+                console.log(`[MoonVoice] 已把旧的按模式延迟迁移为音频间隔: ${active.segmentGap}s`);
             }
         }
 
@@ -186,9 +186,9 @@
                 && !inj.content.includes(NEW_MARK)
                 && OURS.every(k => inj.content.includes(k))) {
                 inj.content = defaultSettings.promptInjection.content;
-                console.log('[BreezeTTS2] 默认提示词已升级到当前版本');
+                console.log('[MoonVoice] 默认提示词已升级到当前版本');
             }
-        } catch (e) { console.warn('[BreezeTTS2] 提示词迁移失败:', e); }
+        } catch (e) { console.warn('[MoonVoice] 提示词迁移失败:', e); }
         if (typeof active.voiceMap !== 'object') active.voiceMap = {};
         if (!active.regexFilter || typeof active.regexFilter !== 'object') {
             active.regexFilter = { enabled: false, pattern: '' };
@@ -236,14 +236,14 @@
 
     function saveSettings() {
         const ctx = getContext();
-        if (!ctx) { console.warn('[BreezeTTS2] 保存设置失败: 上下文不可用'); return; }
+        if (!ctx) { console.warn('[MoonVoice] 保存设置失败: 上下文不可用'); return; }
         if (!ctx.extensionSettings) ctx.extensionSettings = {};
         const root = getRootSettings();
         if (!root) return;
         ctx.extensionSettings[extensionName] = root;
         if (typeof ctx.saveSettingsDebounced === 'function') ctx.saveSettingsDebounced();
         else if (typeof ctx.saveSettings === 'function') ctx.saveSettings();
-        else console.warn('[BreezeTTS2] 保存设置失败: 无保存函数');
+        else console.warn('[MoonVoice] 保存设置失败: 无保存函数');
     }
 
     function switchPreset(name) {
@@ -262,7 +262,7 @@
             const ctx = window.SillyTavern?.getContext?.() || window.getContext?.();
             if (ctx?.characterId !== undefined && ctx?.characterId !== null) return `char_${ctx.characterId}`;
             if (ctx?.groupId) return `group_${ctx.groupId}`;
-        } catch (e) { console.error('[BreezeTTS2] 获取卡片ID失败:', e); }
+        } catch (e) { console.error('[MoonVoice] 获取卡片ID失败:', e); }
         return 'default';
     }
 
@@ -307,7 +307,7 @@
                 if (!Array.isArray(list)) return;
                 list.forEach(item => { if (item && item.blobUrl) { try { URL.revokeObjectURL(item.blobUrl); } catch (e) { } } });
             });
-        } catch (e) { console.warn('[BreezeTTS2] 清理内存缓存失败:', e); }
+        } catch (e) { console.warn('[MoonVoice] 清理内存缓存失败:', e); }
         Object.keys(audioCache).forEach(k => delete audioCache[k]);
         if (typeof currentPlayback.stop === 'function') {
             currentPlayback.stop(); // 复用 stop：顺带释放行内播放的临时 blobUrl（如有）
@@ -330,8 +330,8 @@
         return idx >= 0 ? String(idx) : null;
     }
 
-    function utf8ToBase64(str) { try { return btoa(unescape(encodeURIComponent(str))); } catch (e) { console.warn('[BreezeTTS2] UTF8转Base64失败:', e); return ''; } }
-    function base64ToUtf8(str) { try { return decodeURIComponent(escape(atob(str))); } catch (e) { console.warn('[BreezeTTS2] Base64转UTF8失败:', e); return ''; } }
+    function utf8ToBase64(str) { try { return btoa(unescape(encodeURIComponent(str))); } catch (e) { console.warn('[MoonVoice] UTF8转Base64失败:', e); return ''; } }
+    function base64ToUtf8(str) { try { return decodeURIComponent(escape(atob(str))); } catch (e) { console.warn('[MoonVoice] Base64转UTF8失败:', e); return ''; } }
 
     // ==================== IndexedDB 音频存储  ====================
     const AudioStorage = (function () {
@@ -339,9 +339,13 @@
         function getDB() {
             if (dbPromise) return dbPromise;
             dbPromise = new Promise((resolve, reject) => {
-                if (!window.indexedDB) { console.warn('[BreezeTTS2] 浏览器不支持indexedDB，音频缓存已禁用'); resolve(null); return; }
+                if (!window.indexedDB) { console.warn('[MoonVoice] 浏览器不支持indexedDB，音频缓存已禁用'); resolve(null); return; }
+                // 库名沿用改名前的老名字（BreezeTTS2），刻意不改：它是浏览器里的
+                // 本地音频缓存库，改名等于让所有老用户的缓存凭空消失（会重新合成一遍）。
+                // 与之同类被冻结的标识符还有插件设置键与 CSS 类前缀——两者都带改名前
+                // 那个项目名的缩写，动了就是丢用户配置 / 样式失配，同样不能改。
                 const request = window.indexedDB.open('BreezeTTS2_Store', 2);
-                request.onerror = () => { console.error('[BreezeTTS2] indexedDB open error:', request.error); resolve(null); };
+                request.onerror = () => { console.error('[MoonVoice] indexedDB open error:', request.error); resolve(null); };
                 request.onupgradeneeded = (event) => {
                     const db = event.target.result;
                     if (!db.objectStoreNames.contains('audios')) { const store = db.createObjectStore('audios', { keyPath: 'hash' }); store.createIndex('timestamp', 'timestamp', { unique: false }); }
@@ -358,8 +362,8 @@
                 const store = tx.objectStore('audios');
                 const req = store.put(record);
                 tx.oncomplete = () => resolve();
-                tx.onerror = () => { console.error('[BreezeTTS2] saveAudio error:', tx.error); reject(tx.error); };
-                req.onerror = () => { console.error('[BreezeTTS2] saveAudio request error:', req.error); };
+                tx.onerror = () => { console.error('[MoonVoice] saveAudio error:', tx.error); reject(tx.error); };
+                req.onerror = () => { console.error('[MoonVoice] saveAudio request error:', req.error); };
             });
         }
         async function getAudio(hash) {
@@ -369,7 +373,7 @@
                 const store = tx.objectStore('audios');
                 const req = store.get(hash);
                 req.onsuccess = () => { resolve(req.result || null); };
-                req.onerror = () => { console.error('[BreezeTTS2] getAudio error:', req.error); reject(req.error); };
+                req.onerror = () => { console.error('[MoonVoice] getAudio error:', req.error); reject(req.error); };
             });
         }
         async function getAllAudios() {
@@ -379,7 +383,7 @@
                 const store = tx.objectStore('audios');
                 const req = store.getAll();
                 req.onsuccess = () => { resolve(req.result || []); };
-                req.onerror = () => { console.error('[BreezeTTS2] getAllAudios error:', req.error); reject(req.error); };
+                req.onerror = () => { console.error('[MoonVoice] getAllAudios error:', req.error); reject(req.error); };
             });
         }
         async function clearAllAudios() {
@@ -389,8 +393,8 @@
                 const store = tx.objectStore('audios');
                 const req = store.clear();
                 tx.oncomplete = () => resolve();
-                tx.onerror = () => { console.error('[BreezeTTS2] clearAllAudios error:', tx.error); reject(tx.error); };
-                req.onerror = () => { console.error('[BreezeTTS2] clearAllAudios request error:', req.error); };
+                tx.onerror = () => { console.error('[MoonVoice] clearAllAudios error:', tx.error); reject(tx.error); };
+                req.onerror = () => { console.error('[MoonVoice] clearAllAudios request error:', req.error); };
             });
         }
         async function saveConfig(key, value) {
@@ -424,7 +428,7 @@
             try {
                 const handle = await AudioStorage.getConfig('localDirHandle');
                 if (handle) { dirHandle = handle; }
-            } catch (e) { console.warn('[BreezeTTS2] 本地仓库初始化失败:', e); }
+            } catch (e) { console.warn('[MoonVoice] 本地仓库初始化失败:', e); }
         }
         async function setHandle(handle) { if (!handle) return; dirHandle = handle; await AudioStorage.saveConfig('localDirHandle', handle); }
         function getHandle() { return dirHandle; }
@@ -434,7 +438,7 @@
             try {
                 if ((await dirHandle.queryPermission(opts)) === 'granted') return true;
                 if ((await dirHandle.requestPermission(opts)) === 'granted') return true;
-            } catch (e) { console.warn('[BreezeTTS2] 权限请求失败', e); }
+            } catch (e) { console.warn('[MoonVoice] 权限请求失败', e); }
             return false;
         }
         return { init, setHandle, getHandle, requestPermission };
@@ -454,14 +458,14 @@
             try {
                 const saved = await AudioStorage.getConfig('ambientDirHandle');
                 if (saved) { dirHandle = saved; }
-            } catch (e) { console.warn('[BreezeTTS2][Ambient] 初始化失败', e); }
+            } catch (e) { console.warn('[MoonVoice][Ambient] 初始化失败', e); }
             preloadScenes();
         }
         async function setDirHandle(handle) { if (!handle) return; dirHandle = handle; await AudioStorage.saveConfig('ambientDirHandle', handle); }
         function getDirHandle() { return dirHandle; }
         async function queryPermission() {
             if (!dirHandle) return false;
-            try { return (await dirHandle.queryPermission({ mode: 'read' })) === 'granted'; } catch (e) { console.warn('[BreezeTTS2][Ambient] 查询权限失败r:', e); }
+            try { return (await dirHandle.queryPermission({ mode: 'read' })) === 'granted'; } catch (e) { console.warn('[MoonVoice][Ambient] 查询权限失败r:', e); }
             return false;
         }
         async function requestPermission() {
@@ -469,7 +473,7 @@
             try {
                 if ((await dirHandle.queryPermission({ mode: 'read' })) === 'granted') return true;
                 if ((await dirHandle.requestPermission({ mode: 'read' })) === 'granted') return true;
-            } catch (e) { console.warn('[BreezeTTS2][Ambient] 权限请求失败:', e); }
+            } catch (e) { console.warn('[MoonVoice][Ambient] 权限请求失败:', e); }
             return false;
         }
         function _getVolume() { const s = getSettings(); return Math.max(0, Math.min(1, parseFloat(s.ambientSoundVolume ?? 0.4))); }
@@ -553,12 +557,12 @@
                     }
                     sceneAudioListCache = { paths, events };
                     sceneAudioListFetchTime = Date.now();
-                    console.log('[BreezeTTS2][Ambient] 场景音已加载: 环境音',
+                    console.log('[MoonVoice][Ambient] 场景音已加载: 环境音',
                         paths.size - events.size, '个 / 事件音', events.size, '个');
                     return sceneAudioListCache;
                 })
                 .catch(e => {
-                    console.warn('[BreezeTTS2][Ambient] 获取场景音列表失败，下次重试:', e);
+                    console.warn('[MoonVoice][Ambient] 获取场景音列表失败，下次重试:', e);
                     return { paths: new Map(), events: new Set() };
                 })
                 .finally(() => {
@@ -568,7 +572,7 @@
         }
 
         async function preloadScenes() {
-            try { await _getSceneAudioList(); } catch (e) { console.warn('[BreezeTTS2][Ambient] preloadScenes failed:', e); }
+            try { await _getSceneAudioList(); } catch (e) { console.warn('[MoonVoice][Ambient] preloadScenes failed:', e); }
         }
 
         // 把「pjy 下的相对路径」转成可用的 URL：逐段编码，保留 / 作为分隔符
@@ -591,8 +595,8 @@
                         return { url: _sceneUrl(baseUrl, rel), kind: events.has(name) ? 'event' : 'ambient' };
                     }
                 }
-                console.warn('[BreezeTTS2][Ambient] _loadScene: 没有匹配的场景文件:', sceneName);
-            } catch (e) { console.warn('[BreezeTTS2][Ambient] 加载场景音错误:', e); }
+                console.warn('[MoonVoice][Ambient] _loadScene: 没有匹配的场景文件:', sceneName);
+            } catch (e) { console.warn('[MoonVoice][Ambient] 加载场景音错误:', e); }
             return null;
         }
 
@@ -633,7 +637,7 @@
                 cleanup();
                 // 自动播放被拦截不算错误：等用户点过页面后自然会响
                 if (e && e.name === 'NotAllowedError') { return; }
-                console.warn('[BreezeTTS2][Ambient] 事件音播放失败:', e);
+                console.warn('[MoonVoice][Ambient] 事件音播放失败:', e);
             });
         }
 
@@ -653,15 +657,15 @@
             const found = await _loadScene(sceneName);
 
             if (requestId !== playSceneRequestId) {
-                console.log('[BreezeTTS2][Ambient] playScene: 请求已过期，放弃:', sceneName);
+                console.log('[MoonVoice][Ambient] playScene: 请求已过期，放弃:', sceneName);
                 return;
             }
-            if (!found) { console.log('[BreezeTTS2][Ambient] 没有场景文件:', sceneName); return; }
+            if (!found) { console.log('[MoonVoice][Ambient] 没有场景文件:', sceneName); return; }
 
             if (found.kind === 'event') {
                 // 事件音每次出现都要响，所以不做「同场景保持」判断，也不碰环境音的
                 // currentScene/currentAudio —— 它只是叠上去响一声。
-                console.log('[BreezeTTS2][Ambient] 事件音:', sceneName);
+                console.log('[MoonVoice][Ambient] 事件音:', sceneName);
                 _playEvent(found.url);
                 return;
             }
@@ -669,7 +673,7 @@
             // ---- 以下都是环境音 ----
             // 同场景且正在播放，直接保持，不重新加载
             if (sceneName === currentScene && currentAudio && !currentAudio.paused) {
-                console.log('[BreezeTTS2][Ambient] playScene: 同场景，保持播放:', sceneName);
+                console.log('[MoonVoice][Ambient] playScene: 同场景，保持播放:', sceneName);
                 return;
             }
 
@@ -689,13 +693,13 @@
             }
 
             try {
-                console.log('[BreezeTTS2][Ambient] playScene: 为场景调用 audio.play():', sceneName);
+                console.log('[MoonVoice][Ambient] playScene: 为场景调用 audio.play():', sceneName);
                 await audio.play();
                 if (currentAudio === audio) {
                     _fadeIn(audio);
                 }
             } catch (e) {
-                console.warn('[BreezeTTS2][Ambient] 播放错误:', e);
+                console.warn('[MoonVoice][Ambient] 播放错误:', e);
                 if (currentAudio === audio) {
                     currentAudio = null;
                     currentScene = null;
@@ -723,7 +727,7 @@
             if (!currentAudio || currentAudio.paused) return;
             pausedByPlayback = true;
             try { currentAudio.pause(); } catch (e) { /* 忽略 */ }
-            console.log('[BreezeTTS2][Ambient] 环境音随播放暂停');
+            console.log('[MoonVoice][Ambient] 环境音随播放暂停');
         }
         /** 随台词一起恢复。只有确实是"被我们暂停的"才恢复，避免误播。 */
         function resume() {
@@ -731,8 +735,8 @@
             pausedByPlayback = false;
             if (!was || !currentAudio || !currentAudio.paused) return;
             try {
-                currentAudio.play().catch(e => console.warn('[BreezeTTS2][Ambient] 恢复环境音失败:', e));
-                console.log('[BreezeTTS2][Ambient] 环境音随播放恢复');
+                currentAudio.play().catch(e => console.warn('[MoonVoice][Ambient] 恢复环境音失败:', e));
+                console.log('[MoonVoice][Ambient] 环境音随播放恢复');
             } catch (e) { /* 忽略 */ }
         }
         function setVolume(vol) {
@@ -769,9 +773,9 @@
                 .filter(v => v.id);
             npcResolvedCache = {};   // 池子变了，重新分配
             const tagged = npcVoicePool.filter(v => v.tag).length;
-            console.log(`[BreezeTTS2] NPC 音色池已更新: 共 ${npcVoicePool.length} 个，其中有标签 ${tagged} 个`);
+            console.log(`[MoonVoice] NPC 音色池已更新: 共 ${npcVoicePool.length} 个，其中有标签 ${tagged} 个`);
         } catch (e) {
-            console.warn('[BreezeTTS2] 获取 NPC 音色池失败，沿用上次结果:', e);
+            console.warn('[MoonVoice] 获取 NPC 音色池失败，沿用上次结果:', e);
         }
         return npcVoicePool;
     }
@@ -874,7 +878,7 @@
         if (picked) {
             const cacheable = commit && decided;
             if (cacheable) npcResolvedCache[key] = picked;
-            console.log(`[BreezeTTS2] NPC 分配: "${key}"${voiceTag ? '（' + voiceTag + '）' : '（无标签）'} -> ${picked}`
+            console.log(`[MoonVoice] NPC 分配: "${key}"${voiceTag ? '（' + voiceTag + '）' : '（无标签）'} -> ${picked}`
                 + (cacheable ? '' : '（临时，不写缓存）'));
         }
         return picked;
@@ -893,7 +897,7 @@
             const hit = list.find(v => v && typeof v === 'object' && (v.filename || v.name) === voiceId);
             return hit ? (hit.ref_text || '') : '';
         } catch (e) {
-            console.warn('[BreezeTTS2] 读取音色逐字稿失败（不影响合成，只是缓存键少一个维度）:', e);
+            console.warn('[MoonVoice] 读取音色逐字稿失败（不影响合成，只是缓存键少一个维度）:', e);
             return '';
         }
     }
@@ -913,7 +917,7 @@
                 const hashArray = Array.from(new Uint8Array(digest));
                 return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
             }
-        } catch (e) { console.warn('[BreezeTTS2] SHA-256哈希失败，回退到简单哈希:', e); }
+        } catch (e) { console.warn('[MoonVoice] SHA-256哈希失败，回退到简单哈希:', e); }
         let hash = 0;
         for (let i = 0; i < input.length; i++) {
             const ch = input.charCodeAt(i);
@@ -925,7 +929,7 @@
 
     // ==================== 音频转码 ====================
     async function convertToWav(file) {
-        console.log(`[BreezeTTS2] Converting: ${file.name} (${file.type}, ${file.size} bytes)`);
+        console.log(`[MoonVoice] Converting: ${file.name} (${file.type}, ${file.size} bytes)`);
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = async () => {
@@ -937,7 +941,7 @@
                     const base64 = await blobToBase64Pure(wavBlob);
                     await audioContext.close();
                     resolve(base64);
-                } catch (e) { console.error('[BreezeTTS2] 音频转码失败:', e); reject(e); }
+                } catch (e) { console.error('[MoonVoice] 音频转码失败:', e); reject(e); }
             };
             reader.onerror = reject;
             reader.readAsArrayBuffer(file);
@@ -1062,7 +1066,7 @@
                 }
             }
             return null;
-        } catch (e) { console.error('[BreezeTTS2] parseVNLine error:', e); }
+        } catch (e) { console.error('[MoonVoice] parseVNLine error:', e); }
         return null;
     }
 
@@ -1078,7 +1082,7 @@
         // 转义实体形式
         text = text.replace(/&lt;(think|thinking|thought|summary|details)(\s[^&>]*)?&gt;[\s\S]*?&lt;\/\1\s*&gt;/gi, '');
         if (before !== text) {
-            console.log('[BreezeTTS2] 思考标签块已剥离');
+            console.log('[MoonVoice] 思考标签块已剥离');
         }
         return text;
     }
@@ -1209,16 +1213,16 @@
                 const userRegex = new RegExp(settings.regexFilter.pattern, 'gm');
                 const beforeUser = processedText;
                 processedText = processedText.replace(userRegex, '');
-                console.log('[BreezeTTS2] 用户正则过滤:', beforeUser, '->', processedText);
+                console.log('[MoonVoice] 用户正则过滤:', beforeUser, '->', processedText);
             } catch (e) {
-                console.warn('[BreezeTTS2] 用户正则错误:', e);
+                console.warn('[MoonVoice] 用户正则错误:', e);
             }
         }
 
         // 2. 听书模式内置硬过滤（若用户启用了自定义正则，则跳过内置硬过滤）
         if (settings.parsingMode === 'audiobook' && !(settings.regexFilter?.enabled)) {
-            console.log('[BreezeTTS2] ===== 听书模式内置硬过滤开始 =====');
-            console.log('[BreezeTTS2] 原始文本:', JSON.stringify(originalText));
+            console.log('[MoonVoice] ===== 听书模式内置硬过滤开始 =====');
+            console.log('[MoonVoice] 原始文本:', JSON.stringify(originalText));
             // 2.1 保护加粗内容（用占位符）
             const boldMap = new Map();
             let boldIndex = 0;
@@ -1226,7 +1230,7 @@
                 const placeholder = `{{BOLD:${boldIndex}}}`;
                 boldMap.set(placeholder, content);
                 boldIndex++;
-                console.log(`[BreezeTTS2] 加粗保护: ${match} ->${placeholder}`);
+                console.log(`[MoonVoice] 加粗保护: ${match} ->${placeholder}`);
                 return placeholder;
             });
 
@@ -1257,7 +1261,7 @@
                 const before = processedText;
                 processedText = processedText.replace(regex, '');
                 if (before !== processedText) {
-                    console.log(`[BreezeTTS2] 删除${name}:${regex.source} -> 剩余: ${JSON.stringify(processedText)}`);
+                    console.log(`[MoonVoice] 删除${name}:${regex.source} -> 剩余: ${JSON.stringify(processedText)}`);
                 }
             });
 
@@ -1265,7 +1269,7 @@
             boldMap.forEach((content, placeholder) => {
                 processedText = processedText.split(placeholder).join(content);
             });
-            console.log('[BreezeTTS2] 加粗还原完成');
+            console.log('[MoonVoice] 加粗还原完成');
 
             // 2.5 替换破折号为逗号
             processedText = processedText.replace(/—+/g, '，');
@@ -1280,8 +1284,8 @@
                 .replace(/([\u4e00-\u9fa5，。！？、；：])\s+(?=[\u4e00-\u9fa5，。！？、；：])/g, '$1') // 去除中文及中文标点之间的空格
                 .replace(/\n{2,}/g, '\n')          // 合并多余换行
                 .trim();
-            console.log('[BreezeTTS2] 过滤后文本:', JSON.stringify(processedText));
-            console.log('[BreezeTTS2] ===== 文本处理结束 =====');
+            console.log('[MoonVoice] 过滤后文本:', JSON.stringify(processedText));
+            console.log('[MoonVoice] ===== 文本处理结束 =====');
         } else {
             // GAL/RP 模式：只清理水平空白，保留格式符号和换行结构
             processedText = processedText.replace(/[ \t]+/g, ' ').trim();
@@ -1301,7 +1305,7 @@
             if (cached && cached.blob) {
                 return { hash, blob: cached.blob, character, text, voice: normVoice, speed, volume, isCached: true };
             }
-        } catch (e) { console.warn('[BreezeTTS2] 读取缓存失败:', e); }
+        } catch (e) { console.warn('[MoonVoice] 读取缓存失败:', e); }
 
         if (!allowFetch) {
             return null;
@@ -1330,10 +1334,10 @@
             }
             const blob = await res.blob();
             const record = { hash, blob, character, text, voice: normVoice, speed, volume, timestamp: Date.now(), isCached: false };
-            AudioStorage.saveAudio(record).catch(e => { console.warn('[BreezeTTS2] 保存缓存失败:', e); });
+            AudioStorage.saveAudio(record).catch(e => { console.warn('[MoonVoice] 保存缓存失败:', e); });
             return record;
         } catch (e) {
-            console.error('[BreezeTTS2] TTS API Error:', e);
+            console.error('[MoonVoice] TTS API Error:', e);
             if (e instanceof TypeError || (e.message && (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')))) {
                 console.warn('后端离线，仅使用本地缓存');
                 return null;
@@ -1357,7 +1361,7 @@
             const voiceMap = getVoiceMap();
             if (character && voiceMap[character]) {
                 finalVoice = voiceMap[character];
-                console.log(`[BreezeTTS2] 使用绑定语音: 角色="${character}" -> "${finalVoice}"`);
+                console.log(`[MoonVoice] 使用绑定语音: 角色="${character}" -> "${finalVoice}"`);
             } else {
                 // 旁白或未绑定角色：先尝试 NPC 自动分配，再回退到卡片首个音频
                 // ctx.voiceTag 由行内 span 的 data-g 带过来（见 injectInlineButtons）
@@ -1365,14 +1369,14 @@
                 const cardVoices = Object.values(voiceMap).filter(Boolean);
                 if (npcVoice) {
                     finalVoice = npcVoice;
-                    console.log(`[BreezeTTS2] 角色 "${character}" 未绑定 -> 自动分配: "${finalVoice}"`);
+                    console.log(`[MoonVoice] 角色 "${character}" 未绑定 -> 自动分配: "${finalVoice}"`);
                 } else if (cardVoices.length > 0) {
                     finalVoice = cardVoices[0];
-                    console.log(`[BreezeTTS2] 角色 "${character}" 未绑定，回退到卡片首个音频: "${finalVoice}"`);
+                    console.log(`[MoonVoice] 角色 "${character}" 未绑定，回退到卡片首个音频: "${finalVoice}"`);
                 } else {
                     // 卡片完全没绑定任何音频，才使用默认语音
                     finalVoice = getSettings().defaultVoice;
-                    console.log(`[BreezeTTS2] 当前卡片无任何绑定音频，使用全局默认: "${finalVoice}"`);
+                    console.log(`[MoonVoice] 当前卡片无任何绑定音频，使用全局默认: "${finalVoice}"`);
                 }
             }
         } else {
@@ -1433,7 +1437,7 @@
             await audio.play();
         } catch (e) {
             cleanup();
-            console.error('[BreezeTTS2] 音频播放失败:', e);
+            console.error('[MoonVoice] 音频播放失败:', e);
             if (e.name === 'NotAllowedError') {
                 if (window.toastr) window.toastr.warning('浏览器已拦截自动播放，请先点击页面任意处，或手动点击播放按钮');
             } else {
@@ -1447,7 +1451,7 @@
     // ==================== 音声克隆 ====================
     async function cloneVoice(characterName, base64Audio, originalFileName) {
         const settings = getSettings();
-        console.log(`[BreezeTTS2] Clone: ${characterName}, base64 len=${base64Audio.length}`);
+        console.log(`[MoonVoice] Clone: ${characterName}, base64 len=${base64Audio.length}`);
         try {
             const byteString = atob(base64Audio);
             const ab = new ArrayBuffer(byteString.length);
@@ -1459,7 +1463,7 @@
             formData.append('file', blob, uploadFileName);
             const baseUrl = (settings.cloningUrl || 'http://127.0.0.1:7881/api/v1/breezetts2_cloning').replace(/\/api\/v1\/breezetts2_cloning.*$/ , '').replace(/\/+$/, '');
             const uploadUrl = baseUrl + '/api/v1/upload';
-            console.log(`[BreezeTTS2] Uploading to: ${uploadUrl}, filename:${uploadFileName}`);
+            console.log(`[MoonVoice] Uploading to: ${uploadUrl}, filename:${uploadFileName}`);
             const res = await fetchWithTimeout(uploadUrl, { method: 'POST', mode: 'cors', body: formData });
             const text = await res.text();
             if (!res.ok) { if (window.toastr) window.toastr.error(`上传失败 HTTP ${res.status}:${text}`); return null; }
@@ -1468,7 +1472,7 @@
             if (id) { if (window.toastr) window.toastr.success(`参考音频上传成功: ${id}`); return id; }
             return null;
         } catch (e) {
-            console.error('[BreezeTTS2] 克隆失败:', e);
+            console.error('[MoonVoice] 克隆失败:', e);
             if (window.toastr) window.toastr.error('上传失败: ' + e.message);
             return null;
         }
@@ -1952,7 +1956,7 @@
                         parseInt(mesId)
                     );
                 } catch (e) {
-                    console.warn('[BreezeTTS2] messageFormatting 重渲染失败，回退到DOM剥离:', e);
+                    console.warn('[MoonVoice] messageFormatting 重渲染失败，回退到DOM剥离:', e);
                     renderedHtml = null;
                 }
             }
@@ -2002,7 +2006,7 @@
         if (!window._breezetts2_logged_routes) window._breezetts2_logged_routes = new Set();
         const routeKey = `${speakerName}_${speakerVoice}`;
         if (!window._breezetts2_logged_routes.has(routeKey)) {
-            console.log(`[BreezeTTS2] 角色路由: speaker="${speakerName}", voice="${speakerVoice}"`);
+            console.log(`[MoonVoice] 角色路由: speaker="${speakerName}", voice="${speakerVoice}"`);
             window._breezetts2_logged_routes.add(routeKey);
         }
 
@@ -2059,10 +2063,10 @@
                     const npcVoice = resolveNpcVoice(parsed.character, parsed.voiceTag);
                     if (npcVoice) {
                         voice = npcVoice;
-                        console.log(`[BreezeTTS2] 角色 "${parsed.character}" 未绑定 -> 自动分配: ${npcVoice}`);
+                        console.log(`[MoonVoice] 角色 "${parsed.character}" 未绑定 -> 自动分配: ${npcVoice}`);
                     } else {
                         voice = speakerVoice;
-                        console.warn(`[BreezeTTS2] 角色 "${parsed.character}" 未绑定，回退到:${voice}`);
+                        console.warn(`[MoonVoice] 角色 "${parsed.character}" 未绑定，回退到:${voice}`);
                     }
                 }
                 result.push({
@@ -2171,7 +2175,7 @@
                 result.push({ ...base, text: restored });
             }
             if (getSettings().parsingMode === 'audiobook') {
-                console.log(`[BreezeTTS2] 自动分段: ${merged.length} 句 (过滤后${roughText.length}字)`);
+                console.log(`[MoonVoice] 自动分段: ${merged.length} 句 (过滤后${roughText.length}字)`);
             }
         }
         return result;
@@ -2672,7 +2676,7 @@
 
             const item = list[currentPlayIndex];
             if (!item) {
-                console.warn('[BreezeTTS2] Streaming: invalid item at index', currentPlayIndex);
+                console.warn('[MoonVoice] Streaming: invalid item at index', currentPlayIndex);
                 currentPlayIndex++; playNextAudio(); return;
             }
             if (currentAudio) { currentAudio.pause(); currentAudio.onended = null; currentAudio.onerror = null; currentAudio.src = ''; }
@@ -2714,7 +2718,7 @@
                 }
             };
             currentAudio.onerror = () => {
-                console.error('[BreezeTTS2] Streaming track error at index:', currentPlayIndex);
+                console.error('[MoonVoice] Streaming track error at index:', currentPlayIndex);
                 setLinePlayingByEncoded(msg, encT, encC, false);
 
                 currentPlayIndex++; playNextAudio();
@@ -2749,7 +2753,7 @@
                     if (window.toastr && !isSilent) {
                         const progress = Math.round(((currentInferIndex + 1) / lines.length) * 100);
                         const msg = `推理进度: ${currentInferIndex + 1}/${lines.length} (${progress}%)`;
-                        try { window.toastr.info(msg); } catch (e) { console.warn('[BreezeTTS2] 弹窗通知失败:', e); }
+                        try { window.toastr.info(msg); } catch (e) { console.warn('[MoonVoice] 弹窗通知失败:', e); }
                     }
                     if (list.length >= skipCount && !isPlaying) {
                         isPlaying = true; currentPlayIndex = 0; currentPlayback.sessionId = sessionId;
@@ -2766,7 +2770,7 @@
                         TTSPlayerWindow.show(msg, currentPlayback.controller);
                         playNextAudio();
                     }
-                } catch (e) { console.error('[BreezeTTS2] 流式推理失败:', e); }
+                } catch (e) { console.error('[MoonVoice] 流式推理失败:', e); }
                 currentInferIndex++;
                 if (currentInferIndex >= lines.length && !isPlaying && list.length > 0) {
                     inferDone = true; isPlaying = true; currentPlayIndex = 0; currentPlayback.sessionId = sessionId;
@@ -2844,7 +2848,7 @@
                     if (!record) continue;
                     const blobUrl = URL.createObjectURL(record.blob);
                     list.push({ text: line.text, character: line.character, scene: line.scene || null, voice: line.voice, hash: record.hash, blobUrl });
-                } catch (e) { console.error('[BreezeTTS2] 单句推理失败:', e); }
+                } catch (e) { console.error('[MoonVoice] 单句推理失败:', e); }
             }
             audioCache[mesId] = list;
             return list;
@@ -2947,7 +2951,7 @@
                     AmbientPlayer.playScene(item.scene || null);
                 } else if (getSettings().ambientLoopByScene) {
                     if (index === item.sceneSegStart) {
-                        console.log('[BreezeTTS2][Ambient] LoopByScene: START scene=' + item.scene + ' seg=[' + item.sceneSegStart + ',' + item.sceneSegEnd + ']');
+                        console.log('[MoonVoice][Ambient] LoopByScene: START scene=' + item.scene + ' seg=[' + item.sceneSegStart + ',' + item.sceneSegEnd + ']');
                         AmbientPlayer.playScene(item.scene || null);
                     }
                 } else { AmbientPlayer.playScene(item.scene || null); }
@@ -2991,9 +2995,9 @@
                         }
                     });
                 };
-                audio.onerror = () => { console.error('[BreezeTTS2] 音频轨道错误'); playTrack(index + 1); };
+                audio.onerror = () => { console.error('[MoonVoice] 音频轨道错误'); playTrack(index + 1); };
                 audio.play().catch(e => {
-                    console.error('[BreezeTTS2] 自动播放被阻止', e);
+                    console.error('[MoonVoice] 自动播放被阻止', e);
                     if (e.name === 'NotAllowedError') {
                         if (window.toastr) window.toastr.warning('浏览器已拦截自动播放，请先点击页面任意处，或手动点击播放按钮');
                         return;
@@ -3022,7 +3026,7 @@
             TTSPlayerWindow.show(msg, controller);
             playTrack(0);
         })().catch(e => {
-            console.error('[BreezeTTS2] playMessageQueue error:', e);
+            console.error('[MoonVoice] playMessageQueue error:', e);
             if (window.toastr) window.toastr.error('播放队列出错: ' + e.message);
         });
     }
@@ -3038,7 +3042,7 @@
         // 否则连着两条消息会读成一整段没有断句的独白。
         const gap = getSegmentGap(lastPlayedCharacter, queue[0] && queue[0].character);
         runAfterSegmentGap(gap, () => {
-            try { playMessageQueue(msg, null); } catch (e) { console.warn('[BreezeTTS2] AutoPlay: playMessageQueue threw synchronously:', e); }
+            try { playMessageQueue(msg, null); } catch (e) { console.warn('[MoonVoice] AutoPlay: playMessageQueue threw synchronously:', e); }
         });
     }
 
@@ -3131,7 +3135,7 @@
                 }                
 
                 if (hasUpdate) {
-                    console.log('[BreezeTTS2] 发现新版本:', remoteVersion, '当前:', localVer);
+                    console.log('[MoonVoice] 发现新版本:', remoteVersion, '当前:', localVer);
                     updateUI();
                 }
             } catch (e) {
@@ -3139,7 +3143,7 @@
                     setTimeout(() => checkUpdate(retryCount - 1), 1000);
                     return;
                 }
-                console.warn('[BreezeTTS2] 更新检查失败:', e);
+                console.warn('[MoonVoice] 更新检查失败:', e);
             }
         }
 
@@ -3555,7 +3559,7 @@
             const list = await AudioStorage.getAllAudios();
             const countEl = document.getElementById('breezetts2-cache-count');
             if (countEl) { countEl.textContent = String(list.length || 0); }
-        } catch (e) { console.warn('[BreezeTTS2] 更新缓存统计失败:', e); }
+        } catch (e) { console.warn('[MoonVoice] 更新缓存统计失败:', e); }
     }
 
     const IMPORT_FILENAME_REGEX = /^\[(.*?)\]_(.+)_([a-f0-9]{6,})\.(?:wav|mp3|ogg)$/i;
@@ -3568,7 +3572,7 @@
                     if (n.endsWith('.wav') || n.endsWith('.mp3') || n.endsWith('.ogg')) list.push(handle);
                 } else if (handle.kind === 'directory') { await getAllAudioFilesFromDir(handle, list); }
             }
-        } catch (e) { console.warn('[BreezeTTS2] 扫描目录失败:', e); }
+        } catch (e) { console.warn('[MoonVoice] 扫描目录失败:', e); }
         return list;
     }
 
@@ -3603,13 +3607,13 @@
                         await AudioStorage.saveAudio(record);
                         imported++;
                     }
-                } catch (e) { console.warn('[BreezeTTS2] 导入文件失败:', f.name, e); }
+                } catch (e) { console.warn('[MoonVoice] 导入文件失败:', f.name, e); }
                 if (window.toastr && (i + 1) % 10 === 0) { window.toastr.info(`正在导入: ${i + 1}/${fileHandles.length}`); }
             }
             if (window.toastr) window.toastr.success(`同步完成：新增 ${imported} 条，跳过已存在${skipped} 条`);
         } catch (e) {
             if (e.name === 'AbortError') return;
-            console.error('[BreezeTTS2] 从本地目录导入出错:', e);
+            console.error('[MoonVoice] 从本地目录导入出错:', e);
             if (window.toastr) window.toastr.error('导入失败: ' + e.message);
         }
     }
@@ -3637,7 +3641,7 @@
             }
             if (window.toastr) window.toastr.success(`导出完成，共 ${records.length} 条`);
         } catch (e) {
-            console.error('[BreezeTTS2] 导出音频缓存到文件夹出错:', e);
+            console.error('[MoonVoice] 导出音频缓存到文件夹出错:', e);
             if (window.toastr) window.toastr.error('导出失败: ' + e.message);
         }
     }
@@ -3712,7 +3716,7 @@
                 });
             }            
         } catch (e) {
-            console.error('[BreezeTTS2] Event listener setup error:', e);
+            console.error('[MoonVoice] Event listener setup error:', e);
         }
     }
 
@@ -3759,19 +3763,19 @@
             if (!setupMutationObserver._retries) setupMutationObserver._retries = 0;
             if (setupMutationObserver._retries < 3) {
                 setupMutationObserver._retries++;
-                console.warn('[BreezeTTS2] #chat 未找到，5秒后重试 (', setupMutationObserver._retries, '/3 )');
+                console.warn('[MoonVoice] #chat 未找到，5秒后重试 (', setupMutationObserver._retries, '/3 )');
                 setTimeout(setupMutationObserver, 5000);
             } else {
-                console.warn('[BreezeTTS2] #chat 持续未找到，放弃观察器，仅使用轮询');
+                console.warn('[MoonVoice] #chat 持续未找到，放弃观察器，仅使用轮询');
             }
             return;
         }
         try {
             chatObserver = new MutationObserver(scheduleObserverPolling);
             chatObserver.observe(target, { childList: true, subtree: true });
-            console.log('[BreezeTTS2] MutationObserver 已启用');
+            console.log('[MoonVoice] MutationObserver 已启用');
         } catch (e) {
-            console.warn('[BreezeTTS2] MutationObserver 创建失败，继续使用轮询:', e);
+            console.warn('[MoonVoice] MutationObserver 创建失败，继续使用轮询:', e);
         }
     }
 
