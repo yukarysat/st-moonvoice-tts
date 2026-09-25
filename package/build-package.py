@@ -46,6 +46,25 @@ MODEL_LICENSE_SRC = DEPLOY / "breeze-tts-2" / "LICENSE"
 MODEL_REL = Path("models") / "Breeze-TTS-2-GGUF" / "breeze-tts-2-bf16.gguf"
 SIDECAR_EXE = REPO / "server" / "dist" / "moonvoice-sidecar.exe"
 
+# 随包分发的场景音效（源：作者音效库里的 WAV）。
+# 显式列清单而不是"扫描目录里的 wav"，这样作者以后往库里加东西不会被误打包，
+# 也让"哪些素材以什么依据分发"一目了然。
+# 全部出自 SONNISS #gameaudiogdc 免费音效包 —— 授权允许用于自有项目（含商用、
+# 免署名）并允许修改，禁止的是原样当素材库再分发。故分发前折叠为立体声并
+# 转码为 OGG，使其成为本项目的素材而非原始素材文件。
+# 不含任何 mp3：来源无法确认，其中一个 ID3 版权字段标注为 Sony Pictures。
+SCENE_SAMPLES = [
+    ("环境音效", "乡村_傍晚.wav"),
+    ("环境音效", "森林.wav"),
+    ("环境音效", "森林_清晨.wav"),
+    ("环境音效", "森林_起风.wav"),
+    ("环境音效", "沙滩_海浪.wav"),
+    ("环境音效", "瀑布.wav"),
+    ("环境音效", "雨声.wav"),
+    ("环境音效", "雨声_室内.wav"),
+    ("事件音效", "房间_开门.wav"),
+]
+
 TARGET = HERE / "MoonVoice"
 ZIP_PATH = HERE / "月声整合包.zip"
 
@@ -72,10 +91,12 @@ REQUIRED = [
     "data/voices/女-少年/女少03.wav",
     "data/voices/女-少年/女少03.txt",
     "data/voices/男-青年/男青01.wav",
-    # 场景音效刻意不带，只放说明
+    # 场景音效：9 个 WAV 折叠立体声 + 转码 OGG 后随包（清单见 SCENE_SAMPLES）
     "data/pjy/_说明.txt",
-    "data/pjy/环境音效",
-    "data/pjy/事件音效",
+    "data/pjy/环境音效/雨声.ogg",
+    "data/pjy/环境音效/森林.ogg",
+    "data/pjy/环境音效/沙滩_海浪.ogg",
+    "data/pjy/事件音效/房间_开门.ogg",
     "文档/使用说明.md",
     "文档/NOTICE",
     "文档/LICENSE-Breeze-TTS-2",
@@ -130,43 +151,138 @@ Breeze 靠「参考音频 + 逐字稿」来克隆音色，没有逐字稿的音�
 """)
 
 
-PJY_NOTE = _note("""场景音效放在这里（本整合包刻意不附带任何音效）
+PJY_NOTE = _note("""场景音效放在这里
 ================================================================
 
-这个文件夹是空的，是有意为之 —— 请你自行放入有明确授权的音频。
+这里已经附带 9 个氛围音效（转码为 OGG，体积很小）：
+
+    pjy\\环境音效\\   乡村_傍晚、森林、森林_清晨、森林_起风、
+                     沙滩_海浪、瀑布、雨声、雨声_室内
+    pjy\\事件音效\\   房间_开门
+
+它们出自 SONNISS 的 #gameaudiogdc 免费音效包。那份授权允许在个人与
+商业项目中使用、可修改、无需署名；随包前我们把多声道折叠为立体声并
+转码成 OGG，作为本项目的素材一并提供。版权仍归各家原始权利人。
 
 
-为什么不自带
+没带的那些
 ----------------------------------------------------------------
-制作整合包时检查过手头可用的素材，发现其中含有商业版权内容
-（有一个音效文件的版权字段明确写着 Sony Pictures Entertainment）。
-这类文件在所谓"免费音效"站点上很常见，但版权仍归原权利人，
-随包分发会构成侵权。
-
-其余文件虽然查不出处，但同样无法证明可以自由分发。
-所以本整合包一律不附带音效，把这个选择留给你。
+原本还有 16 个 mp3 氛围音（公园氛围、城镇闹市、厨房、海鸥……），
+一个都没带。原因是来源无法确认：其中一个的 ID3 版权字段明确写着
+Sony Pictures Entertainment，分发即构成侵权；其余文件也查不到出处。
+这类文件在所谓"免费音效"站点上很常见，但版权仍归原权利人。
 
 
-怎么放
+想加更多音效
 ----------------------------------------------------------------
     pjy\\环境音效\\    循环播放，换场景时淡入淡出
     pjy\\事件音效\\    只响一次，叠在环境音之上（敲门、干杯这类）
 
 文件名必须和大模型在台词第三个方括号里写的名字一模一样，
-例如台词写 [雨声]，文件名就叫 雨声.wav。写 [] 就是停止环境音。
+例如台词写 [雨声]，文件名就叫 雨声.ogg（或 .wav）。
+写 [] 就是停止环境音。
 
 支持 .mp3 / .wav / .ogg / .m4a / .aac / .flac
 名字对不上不会报错，只是那一段不播声音。
 
-
-去哪里找能自由使用的音效
-----------------------------------------------------------------
-* freesound.org   —— 筛选 License 为 Creative Commons 0 (CC0)，可自由使用
-* 自己录         —— 手机录一段环境声即可，完全没有版权问题
-* 用 CC-BY 素材时记得在发布物里署名（CC0 不需要）
+推荐来源：
+  · https://sonniss.com/gameaudiogdc
+    免费、每年一届、体积很大（几十 GB）。自己下载即成为被授权人，
+    之后可随意用在作品里，含商用、免署名。
+  · freesound.org
+    把 License 筛成 "Creative Commons 0"（CC0），这类素材允许自由
+    使用与再分发。CC-BY 的需要署名，别筛错。
+  · 自己录
+    手机录一段雨声、街道声就够用，完全没有版权问题。
 
 这里放的文件只在本机使用，插件和整合包都不会把它们上传到任何地方。
 """)
+
+
+FFMPEG_CANDIDATES = [
+    os.environ.get("FFMPEG", ""),
+    r"D:\tools\indextts2-env\ffmpeg.exe",
+    r"D:\tools\indextts2-env\env\ffmpeg\bin\ffmpeg.exe",
+    r"E:\projects\indextts2-windows\index-tts2-nvidia\ffmpeg.exe",
+    "ffmpeg",
+]
+
+
+def find_ffmpeg() -> str:
+    """找一个可用的 ffmpeg。可用环境变量 FFMPEG 指定。"""
+    for cand in FFMPEG_CANDIDATES:
+        if not cand:
+            continue
+        if cand == "ffmpeg" or Path(cand).is_file():
+            try:
+                r = subprocess.run([cand, "-hide_banner", "-version"],
+                                   capture_output=True, timeout=30)
+                if r.returncode == 0:
+                    return cand
+            except (OSError, subprocess.SubprocessError):
+                continue
+    raise SystemExit(
+        "[中止] 找不到 ffmpeg。转码场景音效需要它。\n"
+        "        可用环境变量指定：set FFMPEG=<ffmpeg.exe 的完整路径>")
+
+
+def transcode_scene_audio() -> int:
+    r"""把随包分发的场景音效用 ffmpeg 转成 OGG 写进整合包。
+
+    来源：作者音效库里的 9 个 WAV，出自 SONNISS #gameaudiogdc 免费音效包
+    （文件内嵌的 BWF 元数据可佐证：Pole Position Production、Just Sound
+    Effects、PMSFX 等都是该音效包的供应商）。该授权允许在自有项目中
+    使用（含商用、免署名）并明文允许修改；它禁止的是把音效原样当素材库
+    再分发。所以这里做三件事，让它们明确成为"本项目的素材"：
+
+      * -ac 2          三个文件是 4.0 quad（fmt 块的 channel_mask=0x33 即
+                       FL+FR+BL+BR），折叠为立体声，ffmpeg 用的是标准折叠。
+      * -vn            丢掉 WAV 里内嵌的封面图。不加这一项时 ffmpeg 会把
+                       封面编成 theora 视频流塞进 ogg（实测过）。
+      * -map_metadata -1  清空元数据，避免把供应商的版权字段原样带进包里；
+                       出处统一写在 说明文件 与 文档\NOTICE 里。
+      * 转码为 OGG。原始 WAV 是 24bit / 48~96kHz / 最多 4 声道，合计
+        581.7 MB（单个最大 164 MB）；转码后只占十几 MB。
+
+    为什么不用 Python 的 soundfile：实测对 121 秒以上的文件，无论一次性写
+    还是分块写、甚至全流式读写，都会以 STATUS_STACK_OVERFLOW (0xC00000FD)
+    硬崩。ffmpeg 没有这个问题，7 秒就能转完 125 MB 的文件。
+
+    不包含任何 mp3：来源无法确认，其中一个的 ID3 版权字段标注为
+    Sony Pictures Entertainment。
+    """
+    ff = find_ffmpeg()
+    total_src = 0
+    total_dst = 0
+    n = 0
+    for sub, name in SCENE_SAMPLES:
+        src = DEPLOY / "plugin" / "pjy" / sub / name
+        if not src.is_file():
+            raise SystemExit(f"[中止] 找不到场景音效源文件：{src}")
+        dst = TARGET / "data" / "pjy" / sub / (src.stem + ".ogg")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        cmd = [ff, "-y", "-hide_banner", "-loglevel", "error",
+               "-i", str(src),
+               "-vn",                      # 去掉内嵌封面（否则会多出一条 theora 视频流）
+               "-map_metadata", "-1",      # 清空元数据
+               "-ac", "2",                 # 4.0 quad -> 立体声
+               "-c:a", "libvorbis", "-q:a", "6",
+               str(dst)]
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode != 0 or not dst.is_file():
+            err = r.stderr.decode("utf-8", "replace").strip()[:300]
+            raise SystemExit(f"[中止] ffmpeg 转码失败：{src.name}\n        {err}")
+
+        total_src += src.stat().st_size
+        total_dst += dst.stat().st_size
+        n += 1
+        print(f"    {sub}\\{name:<20} -> {dst.name:<20}"
+              f"{src.stat().st_size / 1048576:>7.1f} MB -> {dst.stat().st_size / 1048576:>6.2f} MB")
+
+    print(f"  共 {n} 个：{total_src / 1048576:.1f} MB -> {total_dst / 1048576:.2f} MB "
+          f"（压到 {total_dst / total_src * 100:.1f}%）")
+    return n
 
 
 def place(src: Path, dst: Path, link: bool, log: list[str]) -> None:
@@ -297,9 +413,10 @@ def main() -> int:
     (TARGET / "data" / "voices" / "_说明.txt").write_bytes(VOICES_NOTE)
     print(f"  附带 {n_samples} 个音色文件 + 说明")
 
-    print("--- 7) 场景音效：刻意不附带 ---")
+    print("--- 7) 场景音效：折叠立体声 + 转码 OGG 后随包 ---")
+    n_scene = transcode_scene_audio()
     (TARGET / "data" / "pjy" / "_说明.txt").write_bytes(PJY_NOTE)
-    print("  已放入说明（不附带任何音效文件）")
+    print(f"  共放入 {n_scene} 个音效 + 说明")
 
     print("--- 8) 文档 ---")
     DOCS = TARGET / "文档"
