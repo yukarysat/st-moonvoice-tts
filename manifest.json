@@ -1,7 +1,7 @@
 {
-    "name": "ST-BreezeTTS-Player",
-    "display_name": "古木兆月:Breeze TTS Player",
-    "description": "Breeze TTS 播放器，支持引号检测与行内播放，情感由大模型自由描述后作为合成指令。派生自 Thirteen-Moons 的 ST-indexTTS2-X-Player（AGPL-3.0）。",
+    "name": "ST-Xiange-Player",
+    "display_name": "古木兆月:弦歌",
+    "description": "弦歌 —— 为 Breeze TTS 2 适配的 SillyTavern 朗读插件。支持引号检测与行内播放、逐句音频间隔、场景音效（环境音/事件音）、NPC 按标签自动分配音色。派生自 Thirteen-Moons 的 ST-indexTTS2-X-Player（AGPL-3.0）。",
     "author": "古木兆月 (Breeze TTS adaptation) / Thirteen-Moons (original)",
     "version": "1.2.7-breeze.3",
     "loading_order": 101,

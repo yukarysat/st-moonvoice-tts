@@ -7,7 +7,7 @@
     // 设置存储键：写进 SillyTavern 的 extension_settings，一旦改动用户配置就会丢，绝不可改
     const extensionName = "st-breezetts2";
     // 扩展目录名：必须与 manifest.json 的 name 以及实际文件夹名一致
-    const extensionFolder = "ST-BreezeTTS-Player";
+    const extensionFolder = "ST-Xiange-Player";
     const extensionFolderPath = (() => {
         try {
             const currentScript = document.currentScript;
@@ -3172,7 +3172,7 @@
                 sessionStorage.setItem('breezetts2_update_notified', 'true');
                 setTimeout(() => {
                     const localVerDisplay = currentVersion || localStorage.getItem('breezetts2_local_version') || '未知';
-                    const msg = `BreezeTTS2 发现新版本！\n\n当前版本：${localVerDisplay}\n最新版本：${remoteVersion}\n\n请前往 GitHub下载更新。`;
+                    const msg = `弦歌 发现新版本！\n\n当前版本：${localVerDisplay}\n最新版本：${remoteVersion}\n\n请前往 GitHub下载更新。`;
                     if (window.toastr) {
                         window.toastr.info(msg, '更新提示', { timeOut: 7000, closeButton: true });
                     } else {
@@ -3211,7 +3211,7 @@
             <div id="breezetts2-settings" class="extension_settings">
                 <div class="inline-drawer">
                     <div class="inline-drawer-toggle inline-drawer-header">
-                        <b>BreezeTTS2 播放器</b>
+                        <b>弦歌 播放器</b>
                         <i class="inline-drawer-icon fa-solid fa-circle-chevron-down"></i>
                     </div>
                     <div class="inline-drawer-content" style="display:none;">

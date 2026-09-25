@@ -1,0 +1,19 @@
+# 统一行尾为 LF。
+# 本项目原本就全是 LF；没有这个文件时，Windows 上的编辑器或脚本
+# （例如 Python 的 Path.write_text 默认 newline=None）会写入 CRLF，
+# 于是 git diff 出现整文件变动，真正的改动被淹没。
+* text=auto eol=lf
+
+# 二进制/资源文件不做任何转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.flac binary
+*.gguf binary
+*.safetensors binary

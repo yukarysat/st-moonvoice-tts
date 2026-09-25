@@ -1,4 +1,4 @@
-# server/ —— Breeze TTS Player 侧车（接口层）
+# server/ —— 弦歌 侧车（接口层）
 
 侧车是一个很小的 FastAPI 服务，**不做语音推理**。它负责：
 
