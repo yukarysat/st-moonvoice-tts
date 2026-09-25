@@ -98,6 +98,17 @@
       <button id="s-go">生成</button>
     </div>
     <div id="s-out"></div>
+    <div class="card" id="s-savebox" hidden>
+      <div class="row">
+        <div class="grow"><label>保存到标签文件夹</label><select id="s-tag"></select></div>
+        <div class="grow"><label>文件名</label><input type="text" id="s-name" placeholder="如 女青01_变体"></div>
+        <button id="s-save">保存到音色库</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0">
+        逐字稿取上面的「台词」栏，所以台词要和生成的音频完全一致。
+        同名会自动加随机后缀，不会覆盖已有音色。
+      </p>
+    </div>
     <h3>本次会话历史</h3>
     <div id="s-hist" class="hint">还没有生成记录</div>
   </section>
@@ -165,7 +176,7 @@
 <script>
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-let TAGS = [], VOICES = [], lastDesign = null;
+let TAGS = [], VOICES = [], lastDesign = null, lastSynth = null;
 
 function toast(msg, kind = '') {
   const el = document.createElement('div');
@@ -216,7 +227,7 @@ async function loadVoices() {
 
   const tagOpts = '<option value="">（根目录 / 无标签）</option>' +
     TAGS.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-  ['#d-tag', '#u-tag'].forEach(s => { const el = $(s); const p = el.value; el.innerHTML = tagOpts; el.value = p; });
+  ['#s-tag', '#d-tag', '#u-tag'].forEach(s => { const el = $(s); const p = el.value; el.innerHTML = tagOpts; el.value = p; });
 
   renderLib();
   return d;
@@ -302,6 +313,13 @@ $('#s-go').onclick = async () => {
     const blob = await res.blob();
     const ms = Math.round(performance.now() - t0);
     showAudio($('#s-out'), blob, `${voice}  ·  cfg ${$('#s-cfg').value}  ·  ${ms} ms`);
+    lastSynth = blob;
+    if (!$('#s-name').value.trim()) {
+      // 默认给个一看就知道是"从某个音色派生"的名字，用户可以改
+      const stem = voice.split('/').pop().replace(/\.wav$/i, '');
+      $('#s-name').value = stem + '_副本';
+    }
+    $('#s-savebox').hidden = false;
     hist.unshift({ t: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
                    text, voice, url: URL.createObjectURL(blob) });
     if (hist.length > 20) { const x = hist.pop(); URL.revokeObjectURL(x.url); }
@@ -334,22 +352,35 @@ $('#d-go').onclick = async () => {
   finally { btn.disabled = false; btn.textContent = '生成试听'; }
 };
 
-$('#d-save').onclick = async () => {
-  if (!lastDesign) return toast('请先生成试听', 'err');
-  const tag = $('#d-tag').value, name = $('#d-name').value.trim();
+// 把刚生成的结果存进音色库。合成页与设计页共用这一段 ——
+// 只有「从哪个前缀取控件」和「逐字稿取哪个输入框」不同，
+// 逻辑复制两份的话以后改一处必漏一处。
+async function saveToLibrary(prefix, blob, transcript) {
+  if (!blob) return toast('请先生成', 'err');
+  const tag = $(`#${prefix}-tag`).value, name = $(`#${prefix}-name`).value.trim();
   if (!name) return toast('请填写文件名', 'err');
   const fd = new FormData();
-  fd.append('file', lastDesign, name + '.wav');
+  fd.append('file', blob, name + '.wav');
   fd.append('tag', tag); fd.append('name', name);
-  fd.append('ref_text', $('#d-text').value.trim());
+  fd.append('ref_text', transcript);
+  const btn = $(`#${prefix}-save`);
+  btn.disabled = true;
   try {
     const r = await api('/api/v1/upload', { method: 'POST', body: fd });
     toast(`已保存：${r.filename}`, 'ok');
     if (r.warning) toast(r.warning, 'err');
-    $('#d-savebox').hidden = true; lastDesign = null;
+    $(`#${prefix}-savebox`).hidden = true;
     await loadVoices();
   } catch (e) { toast('保存失败: ' + e.message, 'err'); }
-};
+  finally { btn.disabled = false; }
+}
+
+// 设计页：逐字稿取「试听文本」
+$('#d-save').onclick = () => saveToLibrary('d', lastDesign, $('#d-text').value.trim());
+
+// 合成页：逐字稿取「台词」。用已有音色合成出满意的效果时，
+// 可以直接留作新音色，或者当另一段参考音频用。
+$('#s-save').onclick = () => saveToLibrary('s', lastSynth, $('#s-text').value.trim());
 
 // ---------------------------------------------------------------- 音色库
 function renderLib() {

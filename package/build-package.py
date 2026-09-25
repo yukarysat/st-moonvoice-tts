@@ -226,7 +226,7 @@ def find_ffmpeg() -> str:
         "        可用环境变量指定：set FFMPEG=<ffmpeg.exe 的完整路径>")
 
 
-def transcode_scene_audio() -> int:
+def transcode_scene_audio(force: bool = False) -> int:
     r"""把随包分发的场景音效用 ffmpeg 转成 OGG 写进整合包。
 
     来源：作者音效库里的 9 个 WAV，出自 SONNISS #gameaudiogdc 免费音效包
@@ -261,6 +261,13 @@ def transcode_scene_audio() -> int:
             raise SystemExit(f"[中止] 找不到场景音效源文件：{src}")
         dst = TARGET / "data" / "pjy" / sub / (src.stem + ".ogg")
         dst.parent.mkdir(parents=True, exist_ok=True)
+        if dst.is_file() and not force:
+            # 已存在就不重转：可能用户自己换过这一条，也省得每次重跑 ffmpeg
+            total_src += src.stat().st_size
+            total_dst += dst.stat().st_size
+            n += 1
+            print(f"    {sub}\\{name:<20} -> {dst.name:<20}   已存在，跳过")
+            continue
 
         cmd = [ff, "-y", "-hide_banner", "-loglevel", "error",
                "-i", str(src),
@@ -341,6 +348,10 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-link", action="store_true", help="复制而不是硬链接")
     ap.add_argument("--zip", action="store_true", help="顺便打成 zip")
+    ap.add_argument("--reset-data", action="store_true",
+                    help="清空 data\\ 并重新铺样例音色与场景音效。"
+                         "默认保留 data\\ —— 用户在工作台里保存的音色就在那里，"
+                         "重建包不能把它删掉。")
     args = ap.parse_args()
     link = not args.no_link
 
@@ -373,10 +384,27 @@ def main() -> int:
         return 1
 
     # ---- 目标目录 ----
-    if TARGET.exists():
-        print(f"  清理旧的 {TARGET.name}\\ ...")
-        shutil.rmtree(TARGET)
-    TARGET.mkdir(parents=True)
+    # 刻意不做 shutil.rmtree(TARGET)，只删本脚本负责生成的那些子目录与文件。
+    # 原因有两个，都是踩过的坑：
+    #   1) 启动器窗口按设计会一直开着（等用户按键）。如果它把工作目录停在包
+    #      根目录，整个目录会被 Windows 占用，rmtree 会以 WinError 32 失败。
+    #      只删子目录就不受这个影响。
+    #   2) data\ 是**用户数据** —— 他在工作台里设计并保存的音色、自己加进去的
+    #      场景音效都在那儿。重建包时顺手删掉它是不可接受的。默认保留，
+    #      只有显式 --reset-data 才清空。
+    reset = args.reset_data
+    TARGET.mkdir(parents=True, exist_ok=True)
+    print(f"  清理旧的程序目录（保留 data\\{'，并按 --reset-data 一并清空' if reset else ''}）...")
+    for sub in ("backend", "sidecar", "文档"):
+        p = TARGET / sub
+        if p.exists():
+            shutil.rmtree(p)
+    for pattern in ("*.cmd", "*.ps1", "readme.txt"):
+        for f in TARGET.glob(pattern):
+            f.unlink()
+    if reset and (TARGET / "data").exists():
+        shutil.rmtree(TARGET / "data")
+        print("  data\\ 已按要求清空")
 
     print("\n--- 1) 后端运行时 ---")
     n = place_tree(AUDIOCPP / "runtime", TARGET / "backend" / "runtime", link)
@@ -396,25 +424,33 @@ def main() -> int:
         (TARGET / d).mkdir(parents=True, exist_ok=True)
 
     print("--- 6) 样例音色（随包附带，让用户解压就能听到声音） ---")
-    voices_src = DEPLOY / "plugin" / "voices"
-    n_samples = 0
-    for f in sorted(voices_src.rglob("*")):
-        if not f.is_file():
-            continue
-        if f.name in ("_说明.md", "_说明.txt"):
-            continue
-        rel = f.relative_to(voices_src)
-        dst = TARGET / "data" / "voices" / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        # 复制而不是硬链接：让整合包里的样例与开发库互相独立，
-        # 避免用户在包里改动（或删除）时影响到开发库。
-        shutil.copy2(f, dst)
-        n_samples += 1
-    (TARGET / "data" / "voices" / "_说明.txt").write_bytes(VOICES_NOTE)
-    print(f"  附带 {n_samples} 个音色文件 + 说明")
+    voices_dir = TARGET / "data" / "voices"
+    already = sorted(v for v in voices_dir.rglob("*.wav")) if voices_dir.is_dir() else []
+    if already and not reset:
+        # 用户可能已经在工作台里设计并保存了自己的音色，绝不能覆盖或删除
+        print(f"  data\\voices 已有 {len(already)} 个音色，保留不动"
+              f"（要重新铺样例请加 --reset-data）")
+        n_samples = 0
+    else:
+        voices_src = DEPLOY / "plugin" / "voices"
+        n_samples = 0
+        for f in sorted(voices_src.rglob("*")):
+            if not f.is_file():
+                continue
+            if f.name in ("_说明.md", "_说明.txt"):
+                continue
+            rel = f.relative_to(voices_src)
+            dst = voices_dir / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            # 复制而不是硬链接：让整合包里的样例与开发库互相独立，
+            # 避免用户在包里改动（或删除）时影响到开发库。
+            shutil.copy2(f, dst)
+            n_samples += 1
+        print(f"  附带 {n_samples} 个音色文件")
+    (voices_dir / "_说明.txt").write_bytes(VOICES_NOTE)
 
     print("--- 7) 场景音效：折叠立体声 + 转码 OGG 后随包 ---")
-    n_scene = transcode_scene_audio()
+    n_scene = transcode_scene_audio(force=reset)
     (TARGET / "data" / "pjy" / "_说明.txt").write_bytes(PJY_NOTE)
     print(f"  共放入 {n_scene} 个音效 + 说明")
 

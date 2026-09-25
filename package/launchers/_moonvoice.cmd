@@ -15,6 +15,12 @@ if "%MODE%"=="" goto no_mode
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 
+REM 把工作目录移出安装目录。本窗口按设计会一直开着等你按键，如果工作目录
+REM 停在安装目录里，Windows 会一直占用它 —— 之后就没办法重命名、删除或
+REM 重新解压这个文件夹（会报"另一个程序正在使用"）。
+REM 下面所有路径都用 %ROOT% 拼的绝对路径，所以换工作目录不影响功能。
+cd /d "%TEMP%" 2>nul
+
 set "BACKEND=%ROOT%\backend"
 set "SIDECAR=%ROOT%\sidecar"
 set "DATA=%ROOT%\data"
