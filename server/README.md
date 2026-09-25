@@ -56,11 +56,29 @@ BREEZE_DATA_DIR=/path/to/my-data python breeze_api.py     # 也可以用环境�
 
 代码留在仓库里（始终只有一份），数据留在原地。别人部署时则不需要这个参数。
 
-### 想把它放进后端整合包？
+### 打包进整合包
 
-可以，像上游 IndexTTS2 插件那样把 `breeze_api.py` 连同两个 html 一起拷进整合包就行，
-拷过去之后数据目录默认也在那儿（会新建空的 `voices/`、`pjy/`）。
-若想沿用原来那套数据，加 `--data-dir` 指回去即可。
+月声整合包里的 `sidecar/moonvoice-sidecar.exe` 就是这个服务的 PyInstaller onefile 打包版，
+由 [`build-exe.cmd`](build-exe.cmd) 生成（会顺带把 `webui.html` / `manage.html` 收进去）：
+
+```
+MoonVoice/
+├─ backend/       Breeze TTS 2 推理运行时（GGUF）
+├─ sidecar/       moonvoice-sidecar.exe
+├─ data/          <- 数据目录（启动器用 --data-dir 显式指到这里）
+│   ├─ voices/    音色库
+│   └─ pjy/       场景音效
+└─ 启动webui.cmd  启动器
+```
+
+**为什么启动器要显式传 `--data-dir`**：打包后数据目录默认是 exe 所在目录，也就是
+`sidecar/`，而包内约定数据放在同级 `data/`。启动器里那一行是：
+
+```bat
+start "" /min /d "%SIDECAR%" "%SIDECAR_EXE%" %HOSTARG% --data-dir "%DATA%"
+```
+
+这样「代码」和「数据」在整合包里也是分开的，重装侧车不会动到音色库。
 
 对比一下：上游 `api.py` 有 `project_root/indextts`、`project_root/checkpoints` 这类硬依赖，
 **必须**待在整合包内部；本侧车没有这种依赖，放哪都能跑。
