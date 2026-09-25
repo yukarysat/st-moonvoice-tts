@@ -389,19 +389,22 @@ if not defined LANIP (
     pause
     exit /b 1
 )
-echo     手机上的酒馆，把插件设置里这三个地址改成：
+echo     同一 WiFi 下的其它设备（手机 / 平板 / 另一台电脑）可以：
 echo.
-echo        TTS 服务地址    http://%LANIP%:7881/tts
-echo        音色克隆地址    http://%LANIP%:7881/api/v1/breezetts2_cloning
-echo        音频列表地址    http://%LANIP%:7881/voices
+echo       用浏览器打开工作台：
+echo         http://%LANIP%:7881/
 echo.
-echo     手机上想直接开工作台：
-echo        http://%LANIP%:7881/
+echo       或者调用这几个接口（给程序用）：
+echo         http://%LANIP%:7881/tts
+echo         http://%LANIP%:7881/voices
+echo         http://%LANIP%:7881/api/v1/scene_audios
+echo         http://%LANIP%:7881/health
 echo.
 echo     注意：
-echo       · 手机和电脑必须在同一个 WiFi 下
+echo       · 其它设备和这台电脑必须在同一个 WiFi / 局域网下
 echo       · 本机地址由路由器分配，可能变化；变了就重新跑一次本文件
 echo       · 后端(7870)仍然只监听本机，没有对外暴露
+echo       · 工作台没有鉴权，同网段的人都能用；想收回就双击 启动webui.cmd
 echo.
 echo     本窗口可以关闭，服务会在后台继续运行。
 echo     要关闭服务请双击「停止全部.cmd」。

@@ -57,24 +57,26 @@ non-commercial use only.
 4. 月声侧车服务（sidecar\moonvoice-sidecar.exe）
 ----------------------------------------------------------------
 
-  作者原创代码，不包含上述组件的代码。
-  源码以 AGPL-3.0 随插件仓库一并提供，可自行审查或自行重建：
-      <插件仓库>/server/breeze_api.py
-      <插件仓库>/server/moonvoice-sidecar.spec
-      <插件仓库>/server/build-exe.cmd
+  作者原创代码，不包含上述组件的代码。源码公开，可自行审查或重建，
+  见本包对应仓库的 server\ 目录（breeze_api.py / moonvoice-sidecar.spec
+  / build-exe.cmd）。
 
 
-5. 酒馆插件（本整合包不包含，请另行安装）
+5. 配套项目（不在本包内）
 ----------------------------------------------------------------
 
-  ST-MoonVoice，AGPL-3.0。
-  派生自 Thirteen-Moons 的 ST-indexTTS2-X-Player，
-  其上游为 kirara 的 st-indextts-player（最初以 MIT 发布），
-  并经 xiaoxiongweihu 与 Thirteen-Moons 实质性改造。
+  本包是一个**独立的语音生成服务**：不含任何 SillyTavern 插件代码，
+  也无需插件即可单独使用。另有一个配套插件 ST-MoonVoice（AGPL-3.0），
+  由使用者自行获取 —— 它的安装与使用说明在它自己的仓库里，
+  不属于本文档的范围。
 
-  依 AGPLv3 §7(b) 附加的署名条款，对 Thirteen-Moons 的署名必须明确
-  且醒目地出现在 LICENSE、项目文档，以及**所有公开发布帖、发布公告
-  与项目展示页**。请勿在转发或二次分发时删除该署名。
+  该插件派生自 Thirteen-Moons 的 ST-indexTTS2-X-Player，其上游为
+  kirara 的 st-indextts-player（最初以 MIT 发布），并经 xiaoxiongweihu
+  与 Thirteen-Moons 实质性改造。
+
+  依 AGPLv3 §7(b) 附加的署名条款：**在分发该插件，或发布介绍该插件的
+  公告与展示页时**，对 Thirteen-Moons 的署名必须明确且醒目。本包的说明
+  文档或发布帖若同时也介绍了该插件，请一并保留该署名。
 
 
 ================================================================
