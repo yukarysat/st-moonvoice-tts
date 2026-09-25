@@ -110,13 +110,13 @@
 
 本插件就是本仓库。装法二选一：
 
-**在 SillyTavern 里装**（推荐）：扩展 → 安装扩展 → 填本仓库地址 → 重启。
+**在 SillyTavern 里装**（推荐）：扩展 → 安装扩展 → 填 `https://github.com/yukarysat/st-moonvoice-tts` → 重启。
 
 **手动装**：
 
 ```bash
 cd <SillyTavern>/public/scripts/extensions/third-party
-git clone <本仓库地址> ST-MoonVoice
+git clone https://github.com/yukarysat/st-moonvoice-tts.git ST-MoonVoice
 ```
 
 目录名必须是 `ST-MoonVoice`——SillyTavern 按文件夹发现扩展，插件内部也用它定位自己。

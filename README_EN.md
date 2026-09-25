@@ -108,11 +108,11 @@ When you are done, run `停止全部.cmd` or just close the two console windows.
 
 ### 2. Install the extension
 
-Either install it from inside SillyTavern (Extensions → Install extension → this repo's URL → restart), or manually:
+Either install it from inside SillyTavern (Extensions → Install extension → `https://github.com/yukarysat/st-moonvoice-tts` → restart), or manually:
 
 ```bash
 cd <SillyTavern>/public/scripts/extensions/third-party
-git clone <this-repo-url> ST-MoonVoice
+git clone https://github.com/yukarysat/st-moonvoice-tts.git ST-MoonVoice
 ```
 
 The directory **must** be named `ST-MoonVoice`: SillyTavern discovers extensions by folder, and the extension uses that name to locate itself.
