@@ -441,9 +441,8 @@ ST-MoonVoice/
 │   ├─ readme.txt           包内纯文本说明
 │   └─ docs/                包内使用说明与 NOTICE
 └─ docs/
-    ├─ IMPLEMENTATION.md    适配的实现细节与设计取舍
-    ├─ prompt-versions/     提示词 v1 → v9 的演进记录与取舍说明
-    └─ upstream/            继承自上游的原始文档（保留以示出处）
+    ├─ IMPLEMENTATION.md    适配的实现细节与设计取舍（含上游仓库、版本与 commit）
+    └─ prompt-versions/     提示词 v1 → v9 的演进记录与取舍说明
 ```
 
 整合包本体（`package/MoonVoice/`，约 7.9 GB）**不入库**，由 `package/build-package.py` 现场装配。

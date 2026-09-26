@@ -411,9 +411,8 @@ ST-MoonVoice/
 │   ├─ readme.txt            plain-text readme shipped in the package
 │   └─ docs/                 in-package manual and NOTICE
 └─ docs/
-    ├─ IMPLEMENTATION.md     implementation notes (Chinese)
-    ├─ prompt-versions/      prompt iteration history v1 → v9 (Chinese)
-    └─ upstream/             original upstream documentation, kept for provenance
+    ├─ IMPLEMENTATION.md     implementation notes (Chinese; includes upstream repo, version and commit)
+    └─ prompt-versions/      prompt iteration history v1 → v9 (Chinese)
 ```
 
 The assembled package itself (`package/MoonVoice/`, ~7.9 GB) is **not committed** — `package/build-package.py` builds it locally.
