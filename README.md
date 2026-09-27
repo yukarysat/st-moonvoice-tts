@@ -70,8 +70,7 @@
 
 ### 1. 拿到整合包
 
-**月声整合包下载：** <https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy>
-（百度网盘。链接里已经带上提取码，打开就能保存）
+**月声整合包下载：** [百度网盘](https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy)
 
 - 文件名：`MoonVoice-1.2.7-moonvoice.5.zip`
 - 大小：6.28 GB（6,737,760,712 字节）

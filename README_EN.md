@@ -74,8 +74,7 @@ Four steps. No command line, no Python.
 
 ### 1. Get the all-in-one package
 
-**MoonVoice package download:** <https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy>
-(Baidu Pan, account required; the link already carries the access code)
+**MoonVoice package download:** [Baidu Pan](https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy)
 
 - File: `MoonVoice-1.2.7-moonvoice.5.zip`
 - Size: 6.28 GB (6,737,760,712 bytes)
