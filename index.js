@@ -64,7 +64,15 @@
         voiceMap: {},
         promptInjection: {
             enabled: true,
-            content: '# 格式输出规范\n**描写任何角色（主要角色、NPC、路人、旁白）说话或叙述时，必须严格遵守格式，每句单开一行**\n\n## 格式：\n[角色名|性别-年龄段][情感描述][场景]“内容”\n\n### 角色名：\n当前说话的人物名称。**名字后面必须用竖线附上「性别-年龄段」标签**，从下列 11 个里选一个最贴切的：\n\n男-儿童 / 男-少年 / 男-青年 / 男-中年 / 男-老年\n女-儿童 / 女-少年 / 女-青年 / 女-中年 / 女-老年\n中性-未定\n\n- 旁白、环境描写、心理叙述固定写 `[旁白|中性-未定]`\n- 判断不了性别、非人类、群体，一律用 `中性-未定`\n- 标签必须来自上面的列表，不要自创\n- 名字里不要出现竖线以外的特殊符号\n\n### 情感描述：\n不要从固定词表中选择。请根据你对这段内容的理解，用一句自然语言描述这句话该怎么说（语气、情绪、语速、音色），写进方括号。\n\n要求：\n- 10~30 字，只描述“怎么说”，不要复述内容\n- 不要出现 ] 符号\n- 语言与内容保持一致（中文用中文描述，英文用英文）\n- **任何一行都不能省略情感描述**\n\n**旁白的情感描述**默认填：\n[平静客观的叙述语气，语速适中，吐字清晰，情绪平稳]\n可按当前场景气氛微调（如紧张场景写「压低声音，语速稍快，带着一丝不安」），但不可留空。\n\n### 内容：\n用「」或 “” 包裹台词或叙述内容。\n\n### 场景：\n用一两个词描述**这句话发生的地方或氛围**。\n\n**先有剧情，再填场景。** 是剧情决定场景，不是场景决定剧情。\n- 当前环境如果正好是文末【可用环境音】里列出的某一个，就照抄那个名字，插件会播对应背景音\n- 其他情况一律写空的方括号 `[]`。**不要为了用上某个音效，而改动剧情发生的地点、天气，或角色正在做的事**\n- NSFW 内容出现时，从【可用环境音】的 NSFW 组里选\n\n例：[小明|男-少年][语气平静，语速适中][]“我们到了。”\n\n## 格式示例：\n[小明|男-少年][语气轻快上扬，带着藏不住的笑意，语速偏快][]“今天的天气真好呢。”\n[旁白|中性-未定][平静客观的叙述语气，语速适中，吐字清晰，情绪平稳][]“他悠闲地在公园中漫步，看着来往的人群。”\n[小雪|女-少年][声音低沉缓慢，带着压抑的鼻音，像刚哭过][雨声]“我没事，真的没事。”\n[中年车夫|男-中年][语气粗粝，语速偏慢][]“客官，坐稳了。”\n[爱可丝|女-青年][慵懒满足，语速舒缓，尾音发软][]“这可是你说的哦，不许反悔。”\n\n---\n\n## 可用环境音\n\n**这一节只是资源清单，与剧情无关。** 它只说明「这些背景音是现成的」，\n**不代表故事应该往这些方向写**。不要为了让某个音效派上用场而改变角色所在的地点、\n天气或正在做的事。选不到合适的就写 `[]`，不会影响播放。\n\n#### 正常场景列表：\n乡村_傍晚、森林、森林_清晨、森林_起风、沙滩_海浪、瀑布、雨声、雨声_室内、房间_开门\n#### NSFW场景列表：\n\n',
+            // 提示词分两块存，是这次结构调整的重点：
+            //   body      —— 插件维护：格式规范、情感描述要求、格式示例，以及清单前的说明。
+            //                默认跟随插件更新刷新（followUpdates）；想自己改正文就把它关掉。
+            //   sceneList —— 你自己维护：可用音效清单那一节。插件**永不覆盖**它，
+            //                所以增减环境音只需要改这里，不会被版本更新冲掉。
+            // 注入时拼成 body + sceneList。
+            body: '# 格式输出规范\n**描写任何角色（主要角色、NPC、路人、旁白）说话或叙述时，必须严格遵守格式，每句单开一行**\n\n## 格式：\n[角色名|性别-年龄段][情感描述][场景]“内容”\n\n### 角色名：\n当前说话的人物名称。**名字后面必须用竖线附上「性别-年龄段」标签**，从下列 11 个里选一个最贴切的：\n\n男-儿童 / 男-少年 / 男-青年 / 男-中年 / 男-老年\n女-儿童 / 女-少年 / 女-青年 / 女-中年 / 女-老年\n中性-未定\n\n- 旁白、环境描写、心理叙述固定写 `[旁白|中性-未定]`\n- 判断不了性别、非人类、群体，一律用 `中性-未定`\n- 标签必须来自上面的列表，不要自创\n- 名字里不要出现竖线以外的特殊符号\n\n### 情感描述：\n不要从固定词表中选择。请根据你对这段内容的理解，用一句自然语言描述这句话该怎么说（语气、情绪、语速、音色），写进方括号。\n\n要求：\n- 10~30 字，只描述“怎么说”，不要复述内容\n- 不要出现 ] 符号\n- 语言与内容保持一致（中文用中文描述，英文用英文）\n- **任何一行都不能省略情感描述**\n\n**旁白的情感描述**默认填：\n[平静客观的叙述语气，语速适中，吐字清晰，情绪平稳]\n可按当前场景气氛微调（如紧张场景写「压低声音，语速稍快，带着一丝不安」），但不可留空。\n\n### 内容：\n用「」或 “” 包裹台词或叙述内容。\n\n### 场景：\n用一两个词描述**这句话发生的地方或氛围**。\n\n**先有剧情，再填场景。** 是剧情决定场景，不是场景决定剧情。\n- 当前环境如果正好是文末【可用环境音】里列出的某一个，就照抄那个名字，插件会播对应背景音\n- 其他情况一律写空的方括号 `[]`。**不要为了用上某个音效，而改动剧情发生的地点、天气，或角色正在做的事**\n- NSFW 内容出现时，从【可用环境音】的 NSFW 组里选\n\n例：[小明|男-少年][语气平静，语速适中][]“我们到了。”\n\n## 格式示例：\n[小明|男-少年][语气轻快上扬，带着藏不住的笑意，语速偏快][]“今天的天气真好呢。”\n[旁白|中性-未定][平静客观的叙述语气，语速适中，吐字清晰，情绪平稳][]“他悠闲地在公园中漫步，看着来往的人群。”\n[小雪|女-少年][声音低沉缓慢，带着压抑的鼻音，像刚哭过][雨声]“我没事，真的没事。”\n[中年车夫|男-中年][语气粗粝，语速偏慢][]“客官，坐稳了。”\n[爱可丝|女-青年][慵懒满足，语速舒缓，尾音发软][]“这可是你说的哦，不许反悔。”\n\n---\n\n## 可用环境音\n\n**这一节只是资源清单，与剧情无关。** 它只说明「这些背景音是现成的」，\n**不代表故事应该往这些方向写**。不要为了让某个音效派上用场而改变角色所在的地点、\n天气或正在做的事。选不到合适的就写 `[]`，不会影响播放。\n\n',
+            sceneList: '#### 正常场景列表：\n乡村_傍晚、森林、森林_清晨、森林_起风、沙滩_海浪、瀑布、雨声、雨声_室内、房间_开门\n#### NSFW场景列表：\n',
+            followUpdates: true,
             depth: 4,
             role: "system"
         },
@@ -73,6 +81,10 @@
             pattern: ''
         }
     };
+
+    // 提示词里「可用音效清单」那一节的起点：body 与 sceneList 就在这里切开，
+    // 迁移旧的 content 时也靠它定位，所以两处共用一个常量。
+    const SCENE_SECTION_MARK = '#### 正常场景列表：';
 
     // ==================== 工具函数 ====================
     /**
@@ -161,6 +173,14 @@
         // 必须在 deepMergeDefaults 之前记录「用户是否已经设过 segmentGap」，
         // 否则合并会把缺失的键填成默认值，就再也分不清"没设过"和"设成了默认值"。
         const hadSegmentGap = active.segmentGap !== undefined;
+        // 提示词迁移的判据**也必须取自合并之前**，理由同上：deepMergeDefaults 会把缺失的
+        // body / sceneList 填成默认值，填过之后就再也分不清「还没迁移」和「已经迁移」了。
+        // （第一版就是写成合并后再判断，结果迁移形同不存在，老用户改过的清单会被默认清单替换。）
+        const injBefore = (active.promptInjection && typeof active.promptInjection === 'object')
+            ? active.promptInjection : null;
+        const hadPromptBody = !!injBefore && typeof injBefore.body === 'string';
+        const legacyPromptContent = (injBefore && typeof injBefore.content === 'string')
+            ? injBefore.content : '';
         deepMergeDefaults(active, defaultSettings);
         if (!hadSegmentGap) {
             const legacy = [active.galSentenceDelay, active.rpSentenceDelay]
@@ -172,23 +192,57 @@
             }
         }
 
-        // 提示词迁移：默认提示词随版本迭代，用「最新版独有的措辞」做幂等判断——
-        // 内容里没有最新标记，就说明还是旧默认值，自动升级到新版。
-        // 两个坑：
-        //   1) 不能用新版并不包含的字符串做否定判断，否则每次 getSettings() 都会重复覆盖；
-        //   2) 只判断「缺标记」还不够——那样会把用户自己写的提示词也冲掉，
-        //      所以要额外要求内容带上本插件默认提示词固定会有的小标题。
+        // 提示词存储结构：老版本是一整块 promptInjection.content；现在拆成
+        //   body      —— 插件维护（格式规范 / 情感描述要求 / 格式示例）
+        //   sceneList —— 用户维护（可用音效清单那一节），插件永不覆盖
+        // 这里是**一次性**迁移；幂等判断用的是合并前抓下来的 hadPromptBody。
         try {
             const inj = active.promptInjection;
-            const NEW_MARK = '不要复述内容';
-            const OURS = ['格式输出规范', '情感描述', '角色名'];
-            if (inj && typeof inj.content === 'string'
-                && !inj.content.includes(NEW_MARK)
-                && OURS.every(k => inj.content.includes(k))) {
-                inj.content = defaultSettings.promptInjection.content;
-                console.log('[MoonVoice] 默认提示词已升级到当前版本');
+            if (inj && typeof inj === 'object' && !hadPromptBody) {
+                const legacy = legacyPromptContent;
+                // 「是不是一直在用插件的提示词」只在这里猜一次，猜完就落成显式设置，
+                // 之后不再靠内容判断 —— 旧机制误伤用户自定义提示词，正是发生在这里。
+                // 判据要**结构性**的（必须是小标题），不能只匹配这几个词：用户自己写的
+                // 提示词里完全可能出现「格式输出规范」这类说法，那样会被误判成自己人。
+                const OURS = ['# 格式输出规范', '### 情感描述', '### 角色名'];
+                const ours = OURS.every(k => legacy.includes(k));
+                if (legacy) {
+                    const at = legacy.indexOf(SCENE_SECTION_MARK);
+                    // 切出来的清单原样保住（用户可能已经增删过音效名）
+                    inj.sceneList = at >= 0
+                        ? legacy.slice(at).trim() + '\n'
+                        : defaultSettings.promptInjection.sceneList;
+                    inj.followUpdates = ours;
+                    inj.body = ours ? defaultSettings.promptInjection.body : legacy;
+                } else {
+                    inj.body = defaultSettings.promptInjection.body;
+                    inj.sceneList = defaultSettings.promptInjection.sceneList;
+                    inj.followUpdates = true;
+                }
+                // 旧的 content 刻意保留不删：万一上面的切分没覆盖到用户写的某一段，
+                // 它还在设置里，可以人工找回。插件此后不再读写它。
+                console.log('[MoonVoice] 提示词已拆成 body + sceneList',
+                            ours ? '（沿用插件的正文，继续跟随更新）'
+                                 : '（检测到自写正文，已停止自动更新）');
             }
         } catch (e) { console.warn('[MoonVoice] 提示词迁移失败:', e); }
+
+        // 跟随插件更新：开着的话正文每次读设置都刷到最新默认值 —— 提示词的改进因此
+        // 能真正到达用户手里，而不是像旧机制那样只在「换标记」那一次生效。
+        // 清单不在此列，它是用户的，任何情况下都不动。
+        try {
+            const inj = active.promptInjection;
+            if (inj && typeof inj === 'object') {
+                if (inj.followUpdates !== false && typeof inj.body === 'string'
+                    && inj.body !== defaultSettings.promptInjection.body) {
+                    inj.body = defaultSettings.promptInjection.body;
+                    console.log('[MoonVoice] 提示词正文已同步到当前版本');
+                }
+                if (typeof inj.sceneList !== 'string') {
+                    inj.sceneList = defaultSettings.promptInjection.sceneList;
+                }
+            }
+        } catch (e) { console.warn('[MoonVoice] 提示词同步失败:', e); }
         if (typeof active.voiceMap !== 'object') active.voiceMap = {};
         if (!active.regexFilter || typeof active.regexFilter !== 'object') {
             active.regexFilter = { enabled: false, pattern: '' };
@@ -3241,9 +3295,13 @@
                         <div class="breezetts2-setting-module">
                             <div class="breezetts2-module-header">📝 提示词管理</div>
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-prompt-enable">启用提示词注入</label><input type="checkbox" id="breezetts2-prompt-enable"${settings.promptInjection?.enabled ? ' checked' : ''}></div>
+                            <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-prompt-follow">正文跟随插件更新</label><input type="checkbox" id="breezetts2-prompt-follow"${settings.promptInjection?.followUpdates !== false ? ' checked' : ''}></div>
+                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">提示词分两块：<strong>正文</strong>（格式规范、情感描述要求、示例）跟随插件更新，每次加载都刷成最新版；<strong>可用音效清单</strong>永远归你，插件不会动它。想在正文里写自己的东西，就把上面这个开关关掉。</div>
                             <div class="breezetts2-setting-row"><label>注入深度</label><input type="number" id="breezetts2-prompt-depth" class="text_pole" value="${settings.promptInjection?.depth ?? 4}" min="0"></div>
                             <div class="breezetts2-setting-row"><label>角色</label><select id="breezetts2-prompt-role" class="text_pole"><option value="system"${settings.promptInjection?.role === 'system' ? ' selected' : ''}>System</option><option value="user"${settings.promptInjection?.role === 'user' ? ' selected' : ''}>User</option><option value="assistant"${settings.promptInjection?.role === 'assistant' ? ' selected' : ''}>Assistant</option></select></div>
-                            <div class="breezetts2-setting-row" style="flex-direction:column; align-items:flex-start;"><label style="margin-bottom:5px;">提示词内容</label><textarea id="breezetts2-prompt-content" class="text_pole" rows="4" placeholder="输入要注入的提示词...">${settings.promptInjection?.content || ''}</textarea></div>
+                            <div class="breezetts2-setting-row" style="flex-direction:column; align-items:flex-start;"><label style="margin-bottom:5px;">提示词正文<span id="breezetts2-prompt-body-note" style="font-weight:normal; opacity:0.7;"></span></label><textarea id="breezetts2-prompt-body" class="text_pole" rows="6" placeholder="提示词正文...">${settings.promptInjection?.body || ''}</textarea></div>
+                            <div class="breezetts2-setting-row" style="flex-direction:column; align-items:flex-start;"><label style="margin-bottom:5px;">可用音效清单（你的，插件不会改它）</label><textarea id="breezetts2-prompt-scenelist" class="text_pole" rows="5" placeholder="#### 正常场景列表：&#10;雨声、森林&#10;#### NSFW场景列表：">${settings.promptInjection?.sceneList || ''}</textarea></div>
+                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;" id="breezetts2-prompt-names-hint"></div>
                         </div>
                         <!-- 模块2：播放与自动化 -->
                         <div class="breezetts2-setting-module">
@@ -3429,7 +3487,47 @@
         if (volInput) { volInput.oninput = (e) => { const val = parseFloat(e.target.value); document.getElementById('breezetts2-volume-val').textContent = val.toFixed(2); const s = getSettings(); s.volume = val; saveSettings(); }; }
 
         const bindPrompt = (id, field) => { const el = panel.querySelector(id); if (el) { el.oninput = el.onchange = (e) => { const s = getSettings(); if (!s.promptInjection || typeof s.promptInjection !== 'object') { s.promptInjection = JSON.parse(JSON.stringify(defaultSettings.promptInjection)); } s.promptInjection[field] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; saveSettings(); }; } };
-        bindPrompt('#breezetts2-prompt-enable', 'enabled'); bindPrompt('#breezetts2-prompt-depth', 'depth'); bindPrompt('#breezetts2-prompt-role', 'role'); bindPrompt('#breezetts2-prompt-content', 'content');
+        bindPrompt('#breezetts2-prompt-enable', 'enabled'); bindPrompt('#breezetts2-prompt-depth', 'depth'); bindPrompt('#breezetts2-prompt-role', 'role');
+        bindPrompt('#breezetts2-prompt-body', 'body'); bindPrompt('#breezetts2-prompt-scenelist', 'sceneList');
+        bindPrompt('#breezetts2-prompt-follow', 'followUpdates');
+
+        // 跟随更新开着时，正文每次加载都会被刷成默认值，所以那个框设成只读并说明原因 ——
+        // 否则用户敲进去的字会在下次读设置时凭空消失，像是编辑器坏了。
+        const promptFollow = panel.querySelector('#breezetts2-prompt-follow');
+        const promptBodyEl = panel.querySelector('#breezetts2-prompt-body');
+        const promptBodyNote = panel.querySelector('#breezetts2-prompt-body-note');
+        const syncPromptBodyState = () => {
+            const following = !(promptFollow && !promptFollow.checked);
+            if (promptBodyEl) {
+                promptBodyEl.readOnly = following;
+                promptBodyEl.style.opacity = following ? '0.75' : '1';
+            }
+            if (promptBodyNote) {
+                promptBodyNote.textContent = following
+                    ? '（跟随插件更新，只读；想自己写就关掉上面的开关）'
+                    : '（已停用自动更新，这里由你维护）';
+            }
+        };
+        if (promptFollow) promptFollow.onchange = (e) => { syncPromptBodyState(); };
+        syncPromptBodyState();
+
+        // 整合包自带的样例音效里，哪些名字没出现在用户的清单里 —— 只提示，不动内容。
+        // 这就是「清单也能跟上更新」的实现方式：让用户看见，由他决定加不加。
+        (() => {
+            const hintEl = panel.querySelector('#breezetts2-prompt-names-hint');
+            if (!hintEl) return;
+            const list = (getSettings().promptInjection || {}).sceneList || '';
+            const shipped = defaultSettings.promptInjection.sceneList;
+            const names = shipped.split('\n')
+                .filter(ln => !ln.trim().startsWith('#'))
+                .join('、').split('、')
+                .map(s => s.trim()).filter(Boolean);
+            const missing = names.filter(n => !list.includes(n));
+            if (!names.length) { hintEl.textContent = ''; return; }
+            hintEl.textContent = missing.length
+                ? `提示：整合包自带的这些音效名不在你的清单里 —— ${missing.join('、')}（要用就把它们补进上面的清单，并在 pjy/ 里放好对应文件）`
+                : '你的清单已包含整合包自带的全部音效名。';
+        })();
 
         const ambVolSlider = panel.querySelector('#breezetts2-ambient-volume');
         if (ambVolSlider) { ambVolSlider.oninput = (e) => { const v = parseFloat(e.target.value); AmbientPlayer.setVolume(v); const disp = panel.querySelector('#breezetts2-ambient-volume-val'); if (disp) disp.textContent = Math.round(v * 100) + '%'; }; }
@@ -3697,9 +3795,15 @@
                 eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, (eventData) => {
                     const settings = getSettings();
                     const config = settings.promptInjection;
-                    if (config && config.enabled && config.content) {
+                    if (config && config.enabled) {
+                        // 注入的是「插件维护的正文」+「用户维护的清单」，两块分开存是为了
+                        // 让正文能随版本更新，而用户增删音效名不会被冲掉。
+                        const content = [config.body, config.sceneList]
+                            .filter(s => typeof s === 'string' && s.trim())
+                            .join('\n\n');
+                        if (!content) return;
                         const depth = parseInt(config.depth) || 0;
-                        const injection = { role: config.role || 'system', content: config.content };
+                        const injection = { role: config.role || 'system', content };
                         let index = eventData.chat.length - depth;
                         if (index < 0) index = 0;
                         if (index > eventData.chat.length) index = eventData.chat.length;

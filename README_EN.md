@@ -17,6 +17,7 @@ Character dialogue and narration are split into sentences, synthesised one by on
 >
 > This repository is the **fourth hand**: it ports the extension from the IndexTTS2 backend to Breeze TTS 2.
 > The full attribution obligations are listed in [License & attribution](#license--attribution).
+> See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 [中文说明 →](README.md)
 
@@ -153,6 +154,13 @@ The extension recognises *who is speaking, how, and where* through a fixed text 
 
 Your **main model** has to produce that format. The "prompt injection" toggle (default **on**) injects a prompt containing the full spec and examples at a configurable depth, so a fresh install produces the right format out of the box.
 
+The prompt is stored as **two separate pieces** on purpose:
+
+| | Maintained by | On update |
+| --- | --- | --- |
+| **Body** (format spec, emotion rules, examples) | the extension | refreshed to the latest default on every load; turn "follow plugin updates" off to own it yourself |
+| **Available-sound list** | **you** | **never overwritten** — add or remove sounds by editing just this field |
+
 > It also works with injection off, but then you are responsible for teaching the model the format.
 > Otherwise lines go unrecognised, which shows up as "only a few scattered sentences got read".
 
@@ -175,7 +183,7 @@ Every spoken line goes on its own line, in this shape:
 - **Content** — wrapped in `「」` or `“”`
 
 The extension ships an injectable prompt describing all of this. It is **on by default**.
-Its scene list is **aligned one-to-one with the nine sounds shipped in the package**, so scene audio works out of the box. If you add your own audio, edit that list (see [Scene audio layout](#scene-audio-layout)).
+Its scene list is **aligned one-to-one with the nine sounds shipped in the package**, so scene audio works out of the box. To add or remove sounds afterwards, edit the **Available-sound list** field (Prompt management tab) — that field is **yours and is never overwritten** by an update (see [Scene audio layout](#scene-audio-layout)).
 
 ## Main features
 
@@ -239,7 +247,8 @@ A playback bar independent of the chat log, with separate volume for voice and a
 | Ambience fade duration | 0 | 0 means cut instantly |
 | Event volume | 0.6 | Independent of ambience |
 | Floating player | on | |
-| Prompt injection | on | Injects the built-in format spec at the configured depth. **If you rewrite that prompt yourself, note the auto-upgrade condition** — see [prompt version history](docs/prompt-versions/README.md) |
+| Prompt injection | on | Injects the format spec at the configured depth. Stored as two pieces: the **body** follows plugin updates, the **available-sound list** is always yours |
+| Follow prompt updates | on | Turn it off and the body is yours too (the panel says whether the body is read-only or editable) |
 | Regex filter | off | Turning it on **replaces the built-in filtering** (audiobook mode hard-filters markdown and similar decoration) with your own regex |
 
 ## Scene audio layout
@@ -273,9 +282,12 @@ On a name collision, `环境音效/` wins.
 > 事件音效/ (once):  房间_开门
 > ```
 >
-> To use your own, drop the files into those two folders and change the **normal scene list** under
-> the prompt's 「可用环境音」 section to the matching **filenames without extension**. The extension
-> does not validate names — a typo is silently silent, not an error.
+> To use your own, drop the files into those two folders and change the names in the
+> **Available-sound list** field (Prompt management tab) to the matching **filenames without
+> extension**. The extension does not validate names — a typo is silently silent, not an error.
+>
+> That field is **permanently yours**: the extension only *hints* when a name shipped in the
+> package is missing from your list, and never overwrites or deletes what you wrote.
 >
 > **No audio files are bundled with this repository.** They are large, and some of them may not be
 > appropriate to redistribute. Supply your own, or use a sound library with a clear licence.
