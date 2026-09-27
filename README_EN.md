@@ -366,6 +366,12 @@ The model's scene name does not match your filenames. Look at what is actually i
 **The NPC voices sound off**
 Are the library tags accurate? Scoring depends entirely on the `gender-age` tag. Also, characters you assigned manually in the dubbing panel are never overridden.
 
+**Saving or deleting a voice fails with "cross-site write request rejected"**
+The sidecar classified the request as cross-site. This does not happen when you open SillyTavern
+from `127.0.0.1` or a LAN address; if you serve it from a domain (reverse proxy, internal DNS),
+allow that origin explicitly by starting the sidecar with `--allow-origin https://your.domain`.
+See the [sidecar security notes](server/README.md).
+
 ## Known limitations
 
 - **The backend must be obtained separately** — use the MoonVoice package, or deploy Breeze TTS 2 yourself
@@ -397,10 +403,17 @@ Python 3.9+. Listens on `127.0.0.1:7881` and forwards to `127.0.0.1:7870`:
 python breeze_api.py --backend http://127.0.0.1:7870   # backend elsewhere
 python breeze_api.py --host 0.0.0.0                    # expose to the LAN
 python breeze_api.py --data-dir /path/to/my-data       # voice library and scene audio elsewhere
+python breeze_api.py --origin-guard all                # also block cross-site reads (writes are blocked by default)
+python breeze_api.py --allow-origin https://st.example.com   # if SillyTavern sits behind a domain
 ```
 
+By default the sidecar rejects cross-site `POST` / `PUT` / `DELETE` (rules and rationale:
+[server/README.md](server/README.md)). Opening SillyTavern from localhost or a LAN address is
+unaffected; the flag only matters when it is served from a domain.
+
 > `sidecar/moonvoice-sidecar.exe` in the package is this same service frozen with PyInstaller (onefile).
-> It accepts the same `--host` / `--backend` / `--data-dir` flags; it just does not need Python installed.
+> It accepts the same `--host` / `--backend` / `--data-dir` / `--origin-guard` / `--allow-origin`
+> flags; it just does not need Python installed.
 
 ## Repository layout
 

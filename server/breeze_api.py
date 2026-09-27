@@ -25,17 +25,18 @@ import sys
 import tempfile
 import threading
 import time
+import ipaddress
 import urllib.error
 import urllib.request
 import uuid
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -119,7 +120,7 @@ DEFAULT_MODEL = "breeze-tts-2"
 #
 # 版本号与仓库根目录 manifest.json 保持一致，改版本时两处一起改。
 SOFTWARE_NAME = "月声 MoonVoice"
-SOFTWARE_VERSION = "1.2.7-moonvoice.4"
+SOFTWARE_VERSION = "1.2.7-moonvoice.5"
 SOFTWARE_AUTHOR = "古木兆月"
 SOFTWARE_REPO = "https://github.com/yukarysat/st-moonvoice-tts"
 SOFTWARE_UPSTREAM = "Breeze TTS 2（breezeblue-ai/breeze-tts）· audio.cpp 运行时"
@@ -411,6 +412,84 @@ app.add_middleware(
     expose_headers=["X-Breeze-Voice", "X-Breeze-Guidance", "X-Breeze-Seed",
                     "X-Breeze-Wall-Ms", "X-Breeze-Ref-Warning"],
 )
+
+
+# --------------------------------------------------------------------------- 来源校验
+# 侧车**没有任何鉴权**（本机工具，刻意如此）。但"无鉴权 + allow_origins=*"叠在一起，
+# 意味着用户浏览器里访问的**任意网页**都能跨站调用改写类接口：实测带
+# `Origin: https://evil.example` 发 DELETE /voices/{id} 能真的删掉音色库里的文件，
+# POST /api/v1/upload 的预检也放行。所以这里给浏览器发起的改写请求加一道闸：
+#
+#   · 没有 Origin 头的请求一律放行 —— curl、脚本、服务端调用，以及 <audio src> 这类
+#     非 CORS 请求都不带 Origin，挡了会把正常用法一起挡掉
+#   · Origin 是本机（localhost / 127.0.0.1 / ::1）或私有网段（10./172.16-31./192.168./
+#     169.254./100.64-127. 等，含 Tailscale）放行 —— 插件跑在酒馆页面上，来源就是这些
+#   · 其余一律 403（含 `Origin: null`，即 file:// 页面与沙箱 iframe）
+#
+# 它**不改变**"服务本身没有鉴权"这件事：同网段的人直接用 curl 依然能调（他们本来就能，
+# 因为你把服务开给了整个网段）；这道闸专门针对"浏览器里的第三方页面"。
+# 默认只挡改写类（mutating）；`--origin-guard all` 连读取也挡，`off` 关闭本机制。
+ORIGIN_GUARD_CHOICES = ("off", "mutating", "all")
+_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_origin_guard = "mutating"
+_extra_origins: set[str] = set()
+
+# 100.64.0.0/10 是运营商级 NAT 的保留网段，Tailscale 等组网工具用的就是它。
+# 注意 ipaddress 的 is_private 并**不**包含它（实测 py3.12 返回 False），所以必须自己列，
+# 否则走 Tailscale 地址打开酒馆的用户会被自己的防护挡住上传。
+_SHARED_ADDRESS_SPACE = ipaddress.ip_network("100.64.0.0/10")
+
+
+def _origin_allowed(origin: str) -> bool:
+    if not origin:
+        return True                     # 没有 Origin 头 = 非浏览器 / 非 CORS 请求
+    if origin in _extra_origins:
+        return True
+    try:
+        parts = urlsplit(origin)
+    except ValueError:
+        return False
+    if parts.scheme not in ("http", "https"):
+        return False                    # 挡掉 "null" 与各种自定义 scheme
+    host = (parts.hostname or "").lower()
+    if host in ("localhost", "127.0.0.1", "::1"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False                    # 域名默认不放行；确实需要时用 --allow-origin 显式加
+    if ip.version == 4 and ip in _SHARED_ADDRESS_SPACE:
+        return True                     # Tailscale / CGNAT
+    return ip.is_private or ip.is_loopback or ip.is_link_local
+
+
+@app.middleware("http")
+async def _origin_guard_middleware(request: Request, call_next):
+    if _origin_guard != "off":
+        guarded = request.method in _MUTATING_METHODS or _origin_guard == "all"
+        if guarded:
+            origin = request.headers.get("origin", "")
+            if not _origin_allowed(origin):
+                # 先把请求体读掉再拒绝。直接在客户端还在发 body 时关连接，Windows 会回
+                # RST，客户端拿到的是 ConnectionAborted（WinError 10053）而不是 403 ——
+                # 时好时坏，取决于响应和剩余 body 谁先到。体积过大的不读：拒绝一次
+                # 跨站上传没必要把几十 MB 收进内存。
+                try:
+                    if int(request.headers.get("content-length") or 0) <= 1_048_576:
+                        await request.body()
+                except (ValueError, RuntimeError):
+                    pass
+                print(f"[origin] 已拒绝 {request.method} {request.url.path} —— "
+                      f"Origin={origin!r} 不是本机或局域网地址", flush=True)
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail":
+                             "跨站改写请求已被拒绝：本服务只接受来自本机或局域网地址的 "
+                             "POST/PUT/DELETE。用脚本调用请不带 Origin 头；"
+                             "若你确实是从别的地址打开酒馆（例如域名），"
+                             "用 --allow-origin 显式放行该来源。"},
+                )
+    return await call_next(request)
 
 # 场景音效的静态托管。插件会用 <baseUrl>/pjy/<文件名> 直接作为 <audio> 的 src，
 # 所以这里必须挂载成静态目录，不能只在 /api/v1/scene_audios 里列名字。
@@ -815,7 +894,7 @@ def _manage_page() -> str:
 
 
 def main() -> None:
-    global _BACKEND, _MODEL
+    global _BACKEND, _MODEL, _origin_guard
     parser = argparse.ArgumentParser(description="Breeze TTS 2 sidecar")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=7881)
@@ -824,10 +903,21 @@ def main() -> None:
     parser.add_argument("--data-dir", default=str(DATA_DIR),
                         help="voices/ 与 pjy/ 的父目录。默认与脚本同级；"
                              "也可用环境变量 BREEZE_DATA_DIR 指定")
+    parser.add_argument("--origin-guard", choices=ORIGIN_GUARD_CHOICES,
+                        default=os.environ.get("BREEZE_ORIGIN_GUARD", "mutating"),
+                        help="浏览器来源校验：mutating（默认）=只挡跨站的 POST/PUT/DELETE；"
+                             "all=连 GET 也挡；off=关闭。没有 Origin 头的请求始终放行")
+    parser.add_argument("--allow-origin", action="append", default=[],
+                        metavar="ORIGIN",
+                        help="额外放行的来源，可重复。给「把酒馆放在域名后面」这类少数场景用，"
+                             "例如 --allow-origin https://st.example.com")
     args = parser.parse_args()
 
     _BACKEND = args.backend.rstrip("/")
     _MODEL = args.model
+    _origin_guard = args.origin_guard
+    for o in args.allow_origin:
+        _extra_origins.add(o.strip().rstrip("/"))
     ensure_tag_folders()
     print(f"tag folders: {len(VOICE_TAGS)} 个（{VOICES_DIR}）")
 
@@ -836,6 +926,8 @@ def main() -> None:
     print(f"voices dir : {VOICES_DIR}")
     print(f"scene dir  : {SCENE_AUDIO_DIR}")
     print(f"backend    : {_BACKEND}  (model={_MODEL})")
+    print(f"origin guard: {_origin_guard}"
+          + (f"（额外放行 {sorted(_extra_origins)}）" if _extra_origins else ""))
     print(f"manage page: http://{args.host}:{args.port}/")
     print(f"health     : {backend_health()}")
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")

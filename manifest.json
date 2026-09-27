@@ -3,7 +3,7 @@
     "display_name": "古木兆月:月声-TTS",
     "description": "月声 —— 为 Breeze TTS 2 适配的 SillyTavern 朗读插件。支持引号检测与行内播放、逐句音频间隔、场景音效（环境音/事件音）、NPC 按标签自动分配音色。派生自 Thirteen-Moons 的 ST-indexTTS2-X-Player（AGPL-3.0）。",
     "author": "古木兆月 (Breeze TTS adaptation) / Thirteen-Moons (original)",
-    "version": "1.2.7-moonvoice.4",
+    "version": "1.2.7-moonvoice.5",
     "auto_update": true,
     "loading_order": 101,
     "js": "index.js",

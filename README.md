@@ -392,6 +392,12 @@ Breeze 后端加载模型本身要十几秒（第一次请求会慢），之后�
 音色库里的标签是否准确？打分完全依赖 `性别-年龄段` 标签。
 另外在配音面板里手动指定过的角色不会被自动分配覆盖。
 
+**保存音色 / 删除音色失败，提示「跨站改写请求已被拒绝」**
+侧车把这次请求判成了跨站。正常从 `127.0.0.1` 或局域网地址打开酒馆不会遇到；
+如果你是通过域名（反向代理、内网域名）访问酒馆的，需要显式放行该来源：
+启动侧车时加 `--allow-origin https://你的域名`，详见
+[侧车文档的安全提醒](server/README.md)。
+
 ## 已知限制
 
 - **后端必须另外获取**：本插件不含推理服务，请用月声整合包，或自己部署 Breeze TTS 2
@@ -426,10 +432,17 @@ python breeze_api.py
 python breeze_api.py --backend http://127.0.0.1:7870   # 后端在别处
 python breeze_api.py --host 0.0.0.0                    # 供局域网访问
 python breeze_api.py --data-dir /path/to/my-data       # 音色库与场景音效放到别处
+python breeze_api.py --origin-guard all                # 连跨站的读取请求也拦（默认只拦改写）
+python breeze_api.py --allow-origin https://st.example.com   # 酒馆在域名后面时放行它
 ```
 
+侧车默认会拒绝**跨站**的 `POST/PUT/DELETE`（判定规则与理由见
+[server/README.md](server/README.md)）。从本机或局域网地址打开酒馆不受影响，
+这一条只在酒馆挂在域名后面时才用得上。
+
 > 整合包里的 `sidecar/moonvoice-sidecar.exe` 就是这个服务的打包版（PyInstaller onefile），
-> 支持同样的 `--host` / `--backend` / `--data-dir` 参数，只是不需要装 Python。
+> 支持同样的 `--host` / `--backend` / `--data-dir` / `--origin-guard` / `--allow-origin`
+> 参数，只是不需要装 Python。
 
 ## 仓库结构
 
