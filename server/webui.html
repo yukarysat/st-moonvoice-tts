@@ -54,6 +54,9 @@
   .drop.taken { border-style:solid; text-align:left; }
   .drop .t { font-size:13px; }
   .mono { font-family:Consolas,monospace; font-size:12.5px; word-break:break-all; }
+  footer#about { max-width:1080px; margin:0 auto; padding:14px 22px 28px;
+                 border-top:1px solid var(--bd); color:var(--mut); font-size:12px; }
+  footer#about a { color:var(--acc); text-decoration:none; }
   audio { width:100%; margin-top:8px; }
   .vo { display:flex; gap:10px; align-items:center; flex-wrap:wrap;
         padding:9px 0; border-bottom:1px solid rgba(255,255,255,.05); }
@@ -209,6 +212,8 @@
 </main>
 
 <div id="toast"></div>
+
+<footer id="about"><span id="about-text">月声 MoonVoice</span></footer>
 
 <script>
 const $ = (s, r = document) => r.querySelector(s);
@@ -623,7 +628,17 @@ async function refreshHealth() {
     const be = $('#be');
     be.textContent = h.backend_ok ? '后端正常' : '后端不可用';
     be.className = 'pill ' + (h.backend_ok ? 'ok' : 'bad');
+    renderAbout(h.about);
   } catch { $('#be').textContent = 'sidecar 异常'; $('#be').className = 'pill bad'; }
+}
+
+// 署名取自 /health，不在这里写死 —— 版本只有一个来源，改版本时不会两边不一致。
+function renderAbout(a) {
+  const el = $('#about-text');
+  if (!el || !a) return;
+  el.innerHTML = `${esc(a.name)} ${esc(a.version)}　·　${esc(a.author)}　·　`
+    + `<a href="${esc(a.repo)}" target="_blank" rel="noopener noreferrer">源码与说明</a>`
+    + `　·　上游 ${esc(a.upstream)}　·　${esc(a.license)}`;
 }
 
 (async () => {

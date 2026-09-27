@@ -110,6 +110,21 @@ EVENT_SUBDIR = "事件音效"
 DEFAULT_BACKEND = "http://127.0.0.1:7870"
 DEFAULT_MODEL = "breeze-tts-2"
 
+# --------------------------------------------------------------------------- 署名
+# 这套东西是谁做的、基于什么。放在 /health 与两个页面里，让「这个包从哪来的」一眼可查。
+#
+# 刻意**只写声明性信息**（名称、作者、仓库、上游），不写任何用户或机器相关的标识：
+# 那会变成追踪个人，既不合规也没必要。想在输出音频里嵌元数据这类「水印」也是同理 ——
+# 拦不住决心要去掉的人，真正管用的是 AGPL 本身的署名义务。
+#
+# 版本号与仓库根目录 manifest.json 保持一致，改版本时两处一起改。
+SOFTWARE_NAME = "月声 MoonVoice"
+SOFTWARE_VERSION = "1.2.7-moonvoice.4"
+SOFTWARE_AUTHOR = "古木兆月"
+SOFTWARE_REPO = "https://github.com/yukarysat/st-moonvoice-tts"
+SOFTWARE_UPSTREAM = "Breeze TTS 2（breezeblue-ai/breeze-tts）· audio.cpp 运行时"
+SOFTWARE_LICENSE = "AGPL-3.0（侧车与插件）· Apache-2.0（audio.cpp 运行时）"
+
 # References louder than this are almost certainly shouting; Breeze inherits that energy.
 LOUD_RMS_DBFS = -14.0
 # Below this the reference is too quiet to clone reliably.
@@ -382,7 +397,7 @@ def synth_wav_ref(ref_path: Path | None, ref_text: str, text: str, instruction: 
 
 # --------------------------------------------------------------------------- app
 
-app = FastAPI(title="Breeze TTS 2 sidecar", version="0.1.0")
+app = FastAPI(title=f"{SOFTWARE_NAME} sidecar", version=SOFTWARE_VERSION)
 
 # SillyTavern 与 sidecar 不同源，插件的 /tts 请求带 Content-Type: application/json，
 # 属于非简单请求 -> 浏览器必发预检 OPTIONS。没有这个中间件时预检返回 405，
@@ -462,6 +477,15 @@ def health() -> JSONResponse:
         "backend_detail": b,
         "voices": len(list_voices()),
         "loud_rms_dbfs": LOUD_RMS_DBFS,
+        # 署名：谁做的、基于什么、源码在哪。给人和别的程序一个「这包从哪来」的答案。
+        "about": {
+            "name": SOFTWARE_NAME,
+            "version": SOFTWARE_VERSION,
+            "author": SOFTWARE_AUTHOR,
+            "repo": SOFTWARE_REPO,
+            "upstream": SOFTWARE_UPSTREAM,
+            "license": SOFTWARE_LICENSE,
+        },
     })
 
 

@@ -16,6 +16,9 @@
   .pill.ok { color:var(--ok); border-color:var(--ok); }
   .pill.bad { color:var(--err); border-color:var(--err); }
   main { padding:20px 24px 60px; max-width:1180px; }
+  footer#about { max-width:1180px; margin:0 auto; padding:14px 24px 26px;
+                 border-top:1px solid var(--bd); color:var(--mut); font-size:12px; }
+  footer#about a { color:var(--acc); text-decoration:none; }
   section { background:var(--card); border:1px solid var(--bd); border-radius:10px;
             padding:16px 18px; margin-bottom:18px; }
   h2 { margin:0 0 12px; font-size:15px; font-weight:600; }
@@ -91,6 +94,8 @@
   </section>
 </main>
 
+<footer id="about"><span id="about-text">月声 MoonVoice</span></footer>
+
 <div id="toast"></div>
 
 <script>
@@ -121,10 +126,20 @@ async function refreshHealth() {
     const be = $("#be");
     be.textContent = h.backend_ok ? "Breeze 后端正常" : "Breeze 后端不可用";
     be.className = "pill " + (h.backend_ok ? "ok" : "bad");
+    renderAbout(h.about);
   } catch (e) {
     $("#be").textContent = "sidecar 异常";
     $("#be").className = "pill bad";
   }
+}
+
+// 署名取自 /health，不在这里写死 —— 版本只有一个来源。
+function renderAbout(a) {
+  const el = document.getElementById("about-text");
+  if (!el || !a) return;
+  el.innerHTML = `${esc(a.name)} ${esc(a.version)}　·　${esc(a.author)}　·　`
+    + `<a href="${esc(a.repo)}" target="_blank" rel="noopener noreferrer">源码与说明</a>`
+    + `　·　上游 ${esc(a.upstream)}　·　${esc(a.license)}`;
 }
 
 function esc(s) {
