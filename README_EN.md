@@ -151,9 +151,9 @@ The extension recognises *who is speaking, how, and where* through a fixed text 
 [Character|gender-age][emotion description][scene]“content”
 ```
 
-Your **main model** has to produce that format. The "prompt injection" toggle (default **off**) injects a prompt containing the full spec and examples at a configurable depth — turning it on is the easy path.
+Your **main model** has to produce that format. The "prompt injection" toggle (default **on**) injects a prompt containing the full spec and examples at a configurable depth, so a fresh install produces the right format out of the box.
 
-> It works without injection, but then you are responsible for teaching the model the format.
+> It also works with injection off, but then you are responsible for teaching the model the format.
 > Otherwise lines go unrecognised, which shows up as "only a few scattered sentences got read".
 
 ## Output format
@@ -174,7 +174,7 @@ Every spoken line goes on its own line, in this shape:
 - **Scene** — one or two words. If it matches an available sound the matching audio plays; otherwise use empty brackets `[]`
 - **Content** — wrapped in `「」` or `“”`
 
-The extension ships an injectable prompt describing all of this. It is **off by default**; enable it in the settings.
+The extension ships an injectable prompt describing all of this. It is **on by default**.
 Its scene list is **aligned one-to-one with the nine sounds shipped in the package**, so scene audio works out of the box. If you add your own audio, edit that list (see [Scene audio layout](#scene-audio-layout)).
 
 ## Main features
@@ -239,7 +239,7 @@ A playback bar independent of the chat log, with separate volume for voice and a
 | Ambience fade duration | 0 | 0 means cut instantly |
 | Event volume | 0.6 | Independent of ambience |
 | Floating player | on | |
-| Prompt injection | off | Injects the built-in format spec at the configured depth |
+| Prompt injection | on | Injects the built-in format spec at the configured depth. **If you rewrite that prompt yourself, note the auto-upgrade condition** — see [prompt version history](docs/prompt-versions/README.md) |
 | Regex filter | off | Turning it on **replaces the built-in filtering** (audiobook mode hard-filters markdown and similar decoration) with your own regex |
 
 ## Scene audio layout
