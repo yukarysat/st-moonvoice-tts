@@ -237,6 +237,23 @@ def _save_meta(voice: Voice) -> None:
     )
 
 
+def _sync_transcript(voice: Voice) -> None:
+    """让 .txt 与 JSON 里的 ref_text 保持一致。
+
+    读取时 .txt **优先于** JSON（见 _load_meta），所以只写 JSON 是不够的：库里若留着
+    一个旧的 .txt，用户改的逐字稿会被它盖回去，界面上看就是「改了没生效」「清空无效」。
+    文本为空时删掉 .txt，否则「清空逐字稿」同样无效。
+
+    这个 .txt 是给批量放文件用的另一种写法（放进同名 txt 即可，不必手写 JSON），
+    所以只有**真的动了 ref_text** 的路径才调用它 —— 别的路径调用会凭空生成一堆 txt。
+    """
+    text = (voice.ref_text or "").strip()
+    if text:
+        voice.txt_path.write_text(text, encoding="utf-8", newline="")
+    else:
+        voice.txt_path.unlink(missing_ok=True)
+
+
 def list_voices() -> list[Voice]:
     """根目录 + 一层标签子目录里的所有 wav。"""
     if not VOICES_DIR.is_dir():
@@ -253,15 +270,17 @@ def find_voice(voice_id: str) -> Voice:
     if not raw:
         raise HTTPException(status_code=400, detail="音色名为空")
     stem = raw[:-4] if raw.lower().endswith(".wav") else raw
-    candidates = [f"{stem}.wav", stem]
-    for cand in candidates:
-        path = (VOICES_DIR / cand).resolve()
-        try:
-            path.relative_to(VOICES_DIR.resolve())     # 防目录穿越
-        except ValueError:
-            continue
-        if path.is_file():
-            return _load_meta(path)
+    # 只认 <stem>.wav。早先这里还有一个「原样当路径」的候选，于是同目录的 .txt / .json
+    # 也能被解析成「音色」：DELETE 留下的孤儿 .txt 会被 /voices/<名字>.txt/audio 当作音频
+    # 吐出来（174 的 H 组据此报过一条"注意"），PUT/DELETE 也能对着一个 .txt 操作。
+    # 音色库本来就只收 wav（list_voices 只扫 *.wav）。
+    path = (VOICES_DIR / f"{stem}.wav").resolve()
+    try:
+        path.relative_to(VOICES_DIR.resolve())     # 防目录穿越
+    except ValueError:
+        path = None
+    if path is not None and path.is_file():
+        return _load_meta(path)
     # 退化：只给文件名时在子目录里找同名
     base = Path(raw).name
     for w in list_voices():
@@ -629,12 +648,13 @@ async def upload(file: UploadFile = File(...),
         id=(f"{tag}/" if tag else "") + target.name,
         name=target.stem, tag=tag,
         rms_dbfs=dbfs, duration_s=duration, sample_rate=rate,
+        ref_text=(ref_text or "").strip(),
     )
     _save_meta(voice)
-
-    text = (ref_text or "").strip()
-    if text:
-        (target.with_suffix(".txt")).write_text(text, encoding="utf-8", newline="")
+    # 同步而不是直接写 .txt：同名重新上传且**不填**逐字稿时，这一步会清掉可能残留的
+    # 旧 .txt。否则 delete 遗留的孤儿 txt 会被新音色静默继承，克隆时用错逐字稿。
+    _sync_transcript(voice)
+    text = voice.ref_text
 
     return {
         "filename": voice.id,
@@ -730,6 +750,10 @@ async def update_voice(voice_id: str, payload: dict) -> dict:
     except (TypeError, ValueError):
         voice.guidance_scale = 4.0
     _save_meta(voice)
+    if "ref_text" in payload:
+        # 改了逐字稿就要连 .txt 一起改：读取时 .txt 优先，留着旧 txt 会让这次修改
+        # 「保存成功但没生效」，而报错信息一个都不会有。
+        _sync_transcript(voice)
     return {"ok": True, "voice": asdict(voice) | {"filename": voice.id, "ready": voice.ready}}
 
 
@@ -738,6 +762,9 @@ def delete_voice(voice_id: str) -> dict:
     voice = find_voice(voice_id)
     voice.wav_path.unlink(missing_ok=True)
     voice.json_path.unlink(missing_ok=True)
+    # 逐字稿也要删。留着的话，之后同名重新上传（且不填逐字稿）会**静默继承**这份旧稿，
+    # 克隆出来的声音和文本对不上，且看不出原因。
+    voice.txt_path.unlink(missing_ok=True)
     return {"ok": True, "deleted": voice.id}
 
 
