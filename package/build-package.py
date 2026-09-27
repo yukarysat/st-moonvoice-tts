@@ -621,7 +621,15 @@ def main() -> int:
         if ZIP_PATH.exists():
             ZIP_PATH.unlink()
         with zipfile.ZipFile(ZIP_PATH, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-            for root, _d, files in os.walk(TARGET):
+            for root, dirs, files in os.walk(TARGET):
+                # 目录也要作为条目写进去。zip 默认只存文件，空目录（例如上游布局里的
+                # backend\runtime\models）解压后就消失了 —— 那样解压出来的结构与这里
+                # 校验过的组装目录不一致，以后真有一个必需的空目录就会被静默丢掉。
+                for d in dirs:
+                    arc = (Path(root) / d).relative_to(TARGET.parent).as_posix() + "/"
+                    info = zipfile.ZipInfo(arc)
+                    info.external_attr = (0o40755 << 16) | 0x10      # 目录位
+                    z.writestr(info, b"")
                 for f in files:
                     full = Path(root) / f
                     z.write(full, full.relative_to(TARGET.parent))
