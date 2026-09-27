@@ -70,7 +70,22 @@
 
 ### 1. 拿到整合包
 
-**月声整合包下载：** `<待填：整合包下载地址>`
+**月声整合包下载：** <https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy>
+（百度网盘。链接里已经带上提取码，打开就能保存）
+
+- 文件名：`MoonVoice-1.2.7-moonvoice.5.zip`
+- 大小：6.28 GB（6,737,760,712 字节）
+- SHA256：`11b08fe567bff3e89a671fb5ee3f44a4923452dcbd7e2ed064e97f8a2b1f04d6`
+
+下完建议对一下哈希，Windows 自带命令就够，不用装东西：
+
+```
+certutil -hashfile MoonVoice-1.2.7-moonvoice.5.zip SHA256
+```
+
+这个包里有 6.8 GB 的模型，下载过程中坏掉一点，后端就会报
+`failed to open GGUF file ... (No such file or directory)` 这类完全看不出原因的错误。
+花几秒对一下值得。
 
 整合包是**独立可用的语音生成工具**，本身不依赖本插件：解压后双击就能用浏览器合成语音。
 本插件只是把它的能力接进 SillyTavern。

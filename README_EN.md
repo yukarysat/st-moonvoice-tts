@@ -74,7 +74,22 @@ Four steps. No command line, no Python.
 
 ### 1. Get the all-in-one package
 
-**MoonVoice package download:** `<TBD: package download link>`
+**MoonVoice package download:** <https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy>
+(Baidu Pan, account required; the link already carries the access code)
+
+- File: `MoonVoice-1.2.7-moonvoice.5.zip`
+- Size: 6.28 GB (6,737,760,712 bytes)
+- SHA256: `11b08fe567bff3e89a671fb5ee3f44a4923452dcbd7e2ed064e97f8a2b1f04d6`
+
+Verify it after downloading — `certutil` ships with Windows, nothing to install:
+
+```
+certutil -hashfile MoonVoice-1.2.7-moonvoice.5.zip SHA256
+```
+
+The archive contains a 6.8 GB model. A partially corrupted download makes the backend fail
+with something like `failed to open GGUF file ... (No such file or directory)`, which gives
+no hint about the real cause.
 
 The package is a **standalone voice-generation tool** — it does not need this extension. Extract it, double-click, and you can synthesise speech in a browser. This extension merely wires that capability into SillyTavern.
 
