@@ -446,7 +446,6 @@ def get_scene_audios() -> dict:
         "scenes": sorted({n for n, _ in ambient}),   # 兼容旧字段：环境音文件名
         "events": sorted({n for n, _ in events}),
         "paths": paths,                                # 文件名 -> pjy 下的相对路径
-        "directory": "plugin/pjy",
         "ambient_dir": AMBIENT_SUBDIR,
         "event_dir": EVENT_SUBDIR,
         "count": len(paths),
