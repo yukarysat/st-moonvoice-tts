@@ -15,8 +15,15 @@
     Breeze 后端是 C++ 程序，在 Windows 上按 ANSI 代码页打开文件，路径含中文
     时读不到模型。压缩包解压出来的顶层目录名就是这个路径的第一段，
     所以它必须是可以直接解压使用的 ASCII 名。
-    ZIP 文件本身叫什么无所谓（月声整合包.zip 完全可以），
-    但说明文档与启动脚本都会检查解压后的路径并在含中文时给出明确提示。
+    说明文档与启动脚本也会检查解压后的路径，含中文时给出明确提示。
+
+为什么**压缩包文件名**也必须是 ASCII：
+    解压工具默认会建一个与压缩包同名的文件夹放在旁边（7-Zip 的
+    「解压到 <压缩包名>\\」、WinRAR 的「解压到 <压缩包名>\\」都是这个行为）。
+    所以压缩包叫 月声整合包.zip，最常见的那个操作就会得到
+    D:\\下载\\月声整合包\\MoonVoice\\ —— 路径里有中文，后端照样读不到模型。
+    光把顶层目录定成 ASCII 是不够的，文件名同样会变成路径的一段。
+    （实际就这么踩过一次：自己解出来验证命名时才发现。）
 
 体积构成：
     backend\\runtime      1.01 GB   硬链接自 <SRC>\\audiocpp\\runtime（187 个文件）
@@ -35,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -124,7 +132,24 @@ SAMPLE_VOICES = [
 ]
 
 TARGET = HERE / "MoonVoice"
-ZIP_PATH = HERE / "月声整合包.zip"
+
+
+def sidecar_version() -> str:
+    """从侧车源码里取版本号，用来给发布包命名。
+
+    名字必须是纯 ASCII（理由见文件开头），带上版本号还能让用户一眼看出自己下的是哪版。
+    取不到就退回不带版本号的名字，不因为读不到版本号而让打包失败。
+    """
+    try:
+        text = (REPO / "server" / "breeze_api.py").read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    match = re.search(r'^SOFTWARE_VERSION\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    return match.group(1) if match else ""
+
+
+_VER = sidecar_version()
+ZIP_PATH = HERE / (f"MoonVoice-{_VER}.zip" if _VER else "MoonVoice.zip")
 
 REQUIRED = [
     "readme.txt",
