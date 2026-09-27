@@ -47,6 +47,13 @@
   .chips button:hover { color:var(--fg); border-color:var(--acc); }
   .card { background:#0c1526; border:1px solid var(--bd); border-radius:10px;
           padding:12px; margin-top:10px; }
+  .drop { border:1.5px dashed var(--bd); border-radius:10px; padding:14px;
+          text-align:center; cursor:pointer; background:#0c1526; transition:.15s; }
+  .drop:hover, .drop:focus-visible { border-color:var(--acc); outline:none; }
+  .drop.over { border-color:var(--acc); background:#12203a; }
+  .drop.taken { border-style:solid; text-align:left; }
+  .drop .t { font-size:13px; }
+  .mono { font-family:Consolas,monospace; font-size:12.5px; word-break:break-all; }
   audio { width:100%; margin-top:8px; }
   .vo { display:flex; gap:10px; align-items:center; flex-wrap:wrap;
         padding:9px 0; border-bottom:1px solid rgba(255,255,255,.05); }
@@ -86,6 +93,36 @@
     <h2>合成语音</h2>
     <label>音色</label>
     <select id="s-voice"></select>
+
+    <h3 style="margin-top:16px">或：直接用一段参考音频（只给本次合成用，不进音色库）</h3>
+    <div class="drop" id="s-drop" tabindex="0" role="button"
+         aria-label="点击选择参考音频，或把音频文件拖到这里">
+      <input type="file" id="s-ref-file" accept="audio/*" hidden>
+      <div id="s-drop-idle">
+        <div class="t">点击这里选择参考音频，或把文件拖进来</div>
+        <div class="hint">wav / mp3 / flac / ogg · 建议 5~15 秒、干净单人、无背景音乐</div>
+      </div>
+      <div id="s-drop-on" hidden>
+        <div class="t mono" id="s-ref-name"></div>
+        <div class="hint" id="s-ref-meta"></div>
+      </div>
+    </div>
+    <div id="s-ref-box" hidden>
+      <label>这段音频里说了什么（逐字稿，必须与音频逐字一致）</label>
+      <textarea id="s-ref-text" style="min-height:52px"
+        placeholder="Breeze 靠它对齐音素；写错、漏字都会明显拉低相似度"></textarea>
+      <div class="row" style="margin-top:10px">
+        <div class="grow"><label>存入音色库的标签</label><select id="s-ref-tag"></select></div>
+        <div class="grow"><label>文件名</label><input type="text" id="s-ref-savename"></div>
+        <button class="ghost" id="s-ref-save">把这段音频存入音色库</button>
+        <button class="danger" id="s-ref-clear">清除</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0">
+        存入音色库后它会长期当克隆样本，<strong>建议用平稳的片段</strong>——
+        带情绪的样本会把那种情绪传染给之后由它生成的每一句话。
+      </p>
+    </div>
+
     <label>台词</label>
     <textarea id="s-text">今天下午的阳光很好，我们沿着河边慢慢走了一段路。</textarea>
     <label>情感描述（决定「怎么说」）</label>
@@ -153,7 +190,7 @@
   <section id="tab-lib" hidden>
     <h2>音色库</h2>
     <p class="hint">
-      标签来自文件夹名。放音频进 <code>plugin\voices\&lt;标签&gt;\</code> 即可，逐字稿用同名 <code>.txt</code>。
+      标签来自文件夹名。放音频进侧车数据目录下的 <code>voices\&lt;标签&gt;\</code> 即可，逐字稿用同名 <code>.txt</code>。
       根目录（无标签）的音色不参与 NPC 自动分配。
     </p>
     <div class="card">
@@ -227,7 +264,7 @@ async function loadVoices() {
 
   const tagOpts = '<option value="">（根目录 / 无标签）</option>' +
     TAGS.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-  ['#s-tag', '#d-tag', '#u-tag'].forEach(s => { const el = $(s); const p = el.value; el.innerHTML = tagOpts; el.value = p; });
+  ['#s-tag', '#d-tag', '#u-tag', '#s-ref-tag'].forEach(s => { const el = $(s); const p = el.value; el.innerHTML = tagOpts; el.value = p; });
 
   renderLib();
   return d;
@@ -285,6 +322,94 @@ function showAudio(host, blob, meta) {
   };
 }
 
+// ---------------------------------------------------------------- 临时参考音频
+// 「合成」页可以直接把一段音频拖/选进来当参考，不必先进音色库。
+// 文件只留在内存里，生成时随请求发给侧车；侧车落到 data/refs/ 下再转发给后端。
+// 想让这段音频长期可用，再点「存入音色库」。
+let refFile = null, refObjectUrl = null;
+
+const fmtSize = n => n < 1048576 ? (n / 1024).toFixed(0) + ' KB'
+                                 : (n / 1048576).toFixed(1) + ' MB';
+
+function setRef(file) {
+  refFile = file || null;
+  if (refObjectUrl) { URL.revokeObjectURL(refObjectUrl); refObjectUrl = null; }
+  const drop = $('#s-drop');
+  if (!refFile) {
+    $('#s-drop-idle').hidden = false; $('#s-drop-on').hidden = true;
+    $('#s-ref-box').hidden = true; drop.classList.remove('taken');
+    return;
+  }
+  $('#s-drop-idle').hidden = true; $('#s-drop-on').hidden = false;
+  $('#s-ref-box').hidden = false; drop.classList.add('taken');
+  $('#s-ref-name').textContent = refFile.name;
+  $('#s-ref-meta').textContent = fmtSize(refFile.size) + ' · 点这里可以换一个文件';
+  if (!$('#s-ref-savename').value.trim())
+    $('#s-ref-savename').value = refFile.name.replace(/\.[^.]+$/, '');
+  // 用 <audio> 读时长，顺便当「这到底是不是音频」的第一道提示
+  refObjectUrl = URL.createObjectURL(refFile);
+  const probe = new Audio();
+  probe.preload = 'metadata';
+  probe.onloadedmetadata = () => {
+    if (isFinite(probe.duration) && probe.duration > 0)
+      $('#s-ref-meta').textContent =
+        `${fmtSize(refFile.size)} · ${probe.duration.toFixed(1)} 秒 · 点这里可以换一个文件`;
+  };
+  probe.onerror = () => toast('浏览器读不出这个文件的音频，换一个试试', 'err');
+  probe.src = refObjectUrl;
+}
+
+const isAudioFile = f => /^audio\//.test(f.type)
+  || /\.(wav|mp3|flac|ogg|oga|opus|aiff?|au|w64)$/i.test(f.name);
+
+$('#s-drop').onclick = () => $('#s-ref-file').click();
+$('#s-drop').onkeydown = e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#s-ref-file').click(); }
+};
+$('#s-ref-file').onchange = e => { const f = e.target.files[0]; if (f) setRef(f); e.target.value = ''; };
+$('#s-ref-clear').onclick = () => setRef(null);
+
+['dragenter', 'dragover'].forEach(ev => $('#s-drop').addEventListener(ev, e => {
+  e.preventDefault(); e.stopPropagation(); $('#s-drop').classList.add('over');
+}));
+['dragleave', 'dragend'].forEach(ev => $('#s-drop').addEventListener(ev, () => {
+  $('#s-drop').classList.remove('over');
+}));
+$('#s-drop').addEventListener('drop', e => {
+  e.preventDefault(); e.stopPropagation();
+  $('#s-drop').classList.remove('over');
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!f) return;
+  if (!isAudioFile(f)) return toast('这不是音频文件：' + f.name, 'err');
+  setRef(f);
+});
+// 拖到页面别处时拦掉默认行为，否则浏览器会直接把那个文件当导航打开、把工作台顶掉
+['dragover', 'drop'].forEach(ev => window.addEventListener(ev, e => {
+  if (!$('#s-drop').contains(e.target)) e.preventDefault();
+}));
+
+$('#s-ref-save').onclick = async () => {
+  if (!refFile) return toast('请先选择参考音频', 'err');
+  const text = $('#s-ref-text').value.trim();
+  if (!text) return toast('请先填逐字稿——Breeze 克隆必需', 'err');
+  const name = $('#s-ref-savename').value.trim() || refFile.name.replace(/\.[^.]+$/, '');
+  const fd = new FormData();
+  fd.append('file', refFile, refFile.name);
+  fd.append('tag', $('#s-ref-tag').value);
+  fd.append('name', name);
+  fd.append('ref_text', text);
+  const btn = $('#s-ref-save'); btn.disabled = true;
+  try {
+    const r = await api('/api/v1/upload', { method: 'POST', body: fd });
+    toast(`已存入音色库：${r.filename}`, 'ok');
+    if (r.warning) toast(r.warning, 'err');
+    await loadVoices();
+    $('#s-voice').value = r.filename;   // 自动选中，接着就能用
+    setRef(null);                        // 已经进库，临时参考撤掉免得混淆
+  } catch (e) { toast('存入失败: ' + e.message, 'err'); }
+  finally { btn.disabled = false; }
+};
+
 const hist = [];
 function renderHist() {
   const el = $('#s-hist');
@@ -299,29 +424,48 @@ function renderHist() {
 
 $('#s-go').onclick = async () => {
   const voice = $('#s-voice').value, text = $('#s-text').value.trim();
-  if (!voice) return toast('请先选择音色', 'err');
+  const useRef = !!refFile;
+  if (useRef && !$('#s-ref-text').value.trim())
+    return toast('请先填参考音频的逐字稿——Breeze 克隆必需', 'err');
+  if (!useRef && !voice) return toast('请先选择音色', 'err');
   if (!text) return toast('台词不能为空', 'err');
   const btn = $('#s-go'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 生成中';
   const t0 = performance.now();
   try {
-    const res = await api('/tts', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, prompt_audio: voice,
-        instruction: $('#s-instr').value.trim(),
-        guidance_scale: Number($('#s-cfg').value), seed: Number($('#s-seed').value) })
-    });
+    let res;
+    if (useRef) {
+      // 临时参考：文件随请求一起发过去，侧车落到 data/refs/ 再转发给后端
+      const fd = new FormData();
+      fd.append('file', refFile, refFile.name);
+      fd.append('ref_text', $('#s-ref-text').value.trim());
+      fd.append('text', text);
+      fd.append('instruction', $('#s-instr').value.trim());
+      fd.append('guidance_scale', $('#s-cfg').value);
+      fd.append('seed', $('#s-seed').value);
+      res = await api('/tts_ref', { method: 'POST', body: fd });
+    } else {
+      res = await api('/tts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, prompt_audio: voice,
+          instruction: $('#s-instr').value.trim(),
+          guidance_scale: Number($('#s-cfg').value), seed: Number($('#s-seed').value) })
+      });
+    }
+    const warn = res.headers.get('X-Breeze-Ref-Warning');
+    if (warn) toast(decodeURIComponent(warn), 'err');
     const blob = await res.blob();
     const ms = Math.round(performance.now() - t0);
-    showAudio($('#s-out'), blob, `${voice}  ·  cfg ${$('#s-cfg').value}  ·  ${ms} ms`);
+    const label = useRef ? refFile.name : voice;
+    showAudio($('#s-out'), blob, `${label}  ·  cfg ${$('#s-cfg').value}  ·  ${ms} ms`);
     lastSynth = blob;
     if (!$('#s-name').value.trim()) {
       // 默认给个一看就知道是"从某个音色派生"的名字，用户可以改
-      const stem = voice.split('/').pop().replace(/\.wav$/i, '');
+      const stem = (useRef ? refFile.name : voice).split('/').pop().replace(/\.[a-z0-9]+$/i, '');
       $('#s-name').value = stem + '_副本';
     }
     $('#s-savebox').hidden = false;
     hist.unshift({ t: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                   text, voice, url: URL.createObjectURL(blob) });
+                   text, voice: label, url: URL.createObjectURL(blob) });
     if (hist.length > 20) { const x = hist.pop(); URL.revokeObjectURL(x.url); }
     renderHist();
   } catch (e) { toast('生成失败: ' + e.message, 'err'); }

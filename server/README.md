@@ -5,10 +5,28 @@
 | 能力 | 路由 |
 |---|---|
 | 音色库（wav + json 元数据、按标签分文件夹、逐字稿） | `GET /voices`、`/voices/{id}/audio`、`/api/v1/upload`、`/voices/{id}/move` |
-| 转发合成请求给 Breeze 后端（串行化，单并发） | `POST /tts` |
+| 转发合成请求给 Breeze 后端（串行化，单并发） | `POST /tts`（JSON，音色库音色）、`POST /tts_ref`（multipart，临时参考音频） |
 | 场景音效清单与静态托管 | `GET /api/v1/scene_audios`、`/pjy/...` |
 | 标签统计、声音设计 | `GET /api/v1/tags`、`POST /design` |
 | 管理页 / 工作台 | `GET /`、`GET /manage` |
+
+### 两条合成路径
+
+| | `POST /tts` | `POST /tts_ref` |
+|---|---|---|
+| 收什么 | JSON | multipart（`file` + 其余字段） |
+| 参考音频 | 音色库里的音色 id | 请求里带上来的那一段 |
+| 谁在用 | SillyTavern 插件 | 工作台「合成」页的拖拽区 |
+| 落盘 | 不动 | 转成 WAV 后按内容哈希存进 `<数据目录>/refs/`，不进音色库、不出现在 `/voices` |
+
+两条都要求逐字稿（`ref_text` / 音色的 `.txt`）：Breeze 靠「参考音频 + 逐字稿」对齐音素，
+缺了它克隆会失效，所以缺逐字稿一律 400 拒绝，而不是让它悄悄变差。
+`refs/` 整个目录随时可以删，不影响音色库与场景音效。
+
+> 上传的参考音频（两条路径都是）会先用 libsndfile 统一转成 16bit PCM WAV 再落盘。
+> 旧行为是把上传内容原样写进 `<名字>.wav` —— 传 mp3 时会得到一个名字像 WAV、
+> 内容却是 mp3 的文件，克隆当场失败而报错完全看不出原因。
+
 
 ## 跑起来
 

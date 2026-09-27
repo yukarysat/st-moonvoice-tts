@@ -73,7 +73,7 @@ echo    Done
 echo ============================================================
 for %%F in ("dist\moonvoice-sidecar.exe") do echo   %%~fF   (%%~zF bytes)
 echo.
-echo   Next: copy dist\moonvoice-sidecar.exe into the package's 侧车\ folder,
+echo   Next: copy dist\moonvoice-sidecar.exe into the package's sidecar\ folder,
 echo         then run the package launchers to verify it end to end.
 echo.
 pause

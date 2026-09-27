@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -93,6 +94,11 @@ def _resolve_data_dir() -> Path:
 
 DATA_DIR = _resolve_data_dir()
 VOICES_DIR = DATA_DIR / "voices"
+# 临时参考音频：工作台「合成」页拖进来那一段，只给本次合成用。
+# 刻意放在 voices/ 之外 —— 它是「试一下」，不是音色库成员，不该出现在 /voices
+# 列表里、也不该被 NPC 自动分配挑中。按内容哈希命名：ASCII 安全、同内容天然去重。
+# 整个目录随时可以删，不影响音色库与场景音效。
+REFS_DIR = DATA_DIR / "refs"
 # 场景音效目录。插件按「场景标签名」找 <名字>.<后缀>，所以文件名必须与提示词里的
 # 场景标签完全一致（含大小写）。原版 IndexTTS 的 api.py 也是放在脚本旁边的 pjy/。
 SCENE_AUDIO_DIR = DATA_DIR / "pjy"
@@ -108,6 +114,11 @@ DEFAULT_MODEL = "breeze-tts-2"
 LOUD_RMS_DBFS = -14.0
 # Below this the reference is too quiet to clone reliably.
 QUIET_RMS_DBFS = -30.0
+
+# 能当参考音频的格式（按 libsndfile 1.2 的能力；m4a/aac 读不了，会明确报错）
+REF_EXTS = {".wav", ".mp3", ".flac", ".ogg", ".oga", ".opus", ".aiff", ".aif", ".au", ".w64"}
+# 参考音频通常几秒到几十秒，给足余量，同时挡住误传的大文件
+MAX_REF_BYTES = 40 * 1024 * 1024
 
 _BACKEND = DEFAULT_BACKEND
 _MODEL = DEFAULT_MODEL
@@ -254,6 +265,33 @@ def probe_audio(path: Path) -> tuple[float, float, int]:
     return round(dbfs, 2), round(len(mono) / rate, 3), int(rate)
 
 
+def normalize_reference(payload: bytes, filename: str) -> bytes:
+    """把上传的参考音频统一转成 16bit PCM WAV 字节。
+
+    为什么非转不可：音色库与后端之间只传**文件路径**，后端按路径自己解码。
+    旧行为是把上传内容原样写进 `<名字>.wav` —— 传 mp3 时会得到一个名字像 WAV、
+    内容却是 mp3 的文件，克隆当场失败，而报错完全看不出原因。这里用 libsndfile
+    现场解码再写成真正的 WAV，顺带把位深统一成 16bit。
+
+    参考音频都很短，不存在大文件下 soundfile 栈溢出那个已知问题。
+    """
+    ext = Path(filename or "").suffix.lower()
+    if ext and ext not in REF_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的音频格式 {ext}（支持：{'、'.join(sorted(REF_EXTS))}）",
+        )
+    try:
+        audio, rate = sf.read(io.BytesIO(payload), dtype="int16", always_2d=True)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"无法解析音频: {exc}") from exc
+    if not audio.size:
+        raise HTTPException(status_code=400, detail="音频内容为空")
+    buf = io.BytesIO()
+    sf.write(buf, audio, int(rate), format="WAV", subtype="PCM_16")
+    return buf.getvalue()
+
+
 def loudness_warning(dbfs: float) -> str | None:
     if dbfs > LOUD_RMS_DBFS:
         return (
@@ -276,15 +314,17 @@ def backend_health() -> dict:
 _ASCII_REF_DIR = Path(tempfile.gettempdir()) / "breeze_refs"
 
 
-def resolve_ref_path(voice: Voice) -> Path:
+def ascii_safe_path(src: Path) -> Path:
     """Return a path the Breeze runtime can actually open.
 
     audio.cpp 是 C++ 实现，在 Windows 上按 ANSI 代码页打开文件，路径里含中文等
     非 ASCII 字符时会失败，报 “could not open WAV input”（注意是 open 不是 parse，
     音频本身完全合法——实测同一文件改成 ASCII 名就能正常合成）。
-    这里对这类音色准备一份 ASCII 路径的副本，用户仍可用中文音色名。
+    这里对这类文件准备一份 ASCII 路径的副本，用户仍可用中文音色名。
+
+    音色库里的音色与工作台临时拖进来的参考音频都走这里 —— 两者都可能是
+    「中文标签文件夹 + 中文文件名」，也都可能整个数据目录就在中文路径下。
     """
-    src = voice.wav_path
     # 必须检查**整个路径**：标签文件夹名（男-中年）本身就是中文，
     # 只看 src.name 会漏掉这一层，导致所有文件夹音色都打不开。
     try:
@@ -302,17 +342,31 @@ def resolve_ref_path(voice: Voice) -> Path:
     return dst
 
 
+def resolve_ref_path(voice: Voice) -> Path:
+    """音色库里某个音色的参考音频路径（必要时转成 ASCII 安全的副本）。"""
+    return ascii_safe_path(voice.wav_path)
+
+
 def synth_wav(voice: Voice | None, text: str, instruction: str, guidance_scale: float,
               seed: int, model: str | None = None) -> bytes:
     """voice=None 时走「声音设计」：只给描述，不给参考音频。"""
+    if voice is None:
+        return synth_wav_ref(None, "", text, instruction, guidance_scale, seed, model)
+    return synth_wav_ref(voice.wav_path, voice.ref_text, text, instruction,
+                         guidance_scale, seed, model)
+
+
+def synth_wav_ref(ref_path: Path | None, ref_text: str, text: str, instruction: str,
+                  guidance_scale: float, seed: int, model: str | None = None) -> bytes:
+    """用一段参考音频克隆。ref_path=None 则退化成纯「声音设计」。"""
     payload = {
         "model": (model or _MODEL),
         "input": text,
         "options": {"guidance_scale": guidance_scale, "seed": seed},
     }
-    if voice is not None:
-        payload["voice_ref"] = str(resolve_ref_path(voice))
-        payload["reference_text"] = voice.ref_text
+    if ref_path is not None:
+        payload["voice_ref"] = str(ascii_safe_path(ref_path))
+        payload["reference_text"] = ref_text
     if instruction.strip():
         payload["options"]["instruction"] = instruction.strip()
 
@@ -339,7 +393,8 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Breeze-Voice", "X-Breeze-Guidance", "X-Breeze-Seed", "X-Breeze-Wall-Ms"],
+    expose_headers=["X-Breeze-Voice", "X-Breeze-Guidance", "X-Breeze-Seed",
+                    "X-Breeze-Wall-Ms", "X-Breeze-Ref-Warning"],
 )
 
 # 场景音效的静态托管。插件会用 <baseUrl>/pjy/<文件名> 直接作为 <audio> 的 src，
@@ -455,7 +510,12 @@ async def upload(file: UploadFile = File(...),
     payload = await file.read()
     if not payload:
         raise HTTPException(status_code=400, detail="上传内容为空")
-    target.write_bytes(payload)
+    if len(payload) > MAX_REF_BYTES:
+        raise HTTPException(status_code=400,
+                            detail=f"音频过大（{len(payload) / 1048576:.1f} MB，"
+                                   f"上限 {MAX_REF_BYTES // 1048576} MB）")
+    # 统一转成真 WAV：见 normalize_reference 的说明（旧行为会把 mp3 原样存成 .wav）
+    target.write_bytes(normalize_reference(payload, file.filename or ""))
 
     try:
         dbfs, duration, rate = probe_audio(target)
@@ -629,24 +689,86 @@ def tts(payload: dict) -> Response:
             raise HTTPException(status_code=502, detail=f"无法连接 Breeze 后端: {exc}") from exc
 
     elapsed = time.perf_counter() - started
-    return _wav_response(wav, elapsed, voice, guidance_scale, seed)
+    return _wav_response(wav, elapsed, voice.id, guidance_scale, seed)
 
 
-def _wav_response(wav: bytes, elapsed: float, voice: Voice,
-                  guidance_scale: float, seed: int):
+@app.post("/tts_ref")
+async def tts_ref(file: UploadFile = File(...),
+                  text: str = Form(""),
+                  ref_text: str = Form(""),
+                  instruction: str = Form(""),
+                  guidance_scale: float = Form(4.0),
+                  seed: int = Form(42)) -> Response:
+    """工作台「合成」页里临时拖进来的参考音频：只给本次合成用，不进音色库。
+
+    与 /tts 分成两个端点，而不是给 /tts 加文件参数：/tts 是插件用的 JSON 接口，
+    这里要收 multipart 文件，混在一个端点里会让插件的调用方也得跟着改。
+
+    逐字稿同样是硬性要求 —— Breeze 靠「参考音频 + 逐字稿」对齐音素，
+    缺了它克隆会失效，与其让它悄悄变差，不如当场拒绝。
+    """
+    text = (text or "").strip()
+    ref_text = (ref_text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text 不能为空")
+    if not ref_text:
+        raise HTTPException(
+            status_code=400,
+            detail="缺少逐字稿。Breeze 靠「参考音频 + 逐字稿」对齐音素，"
+                   "没有逐字稿的参考音频克隆会失效。",
+        )
+
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="上传内容为空")
+    if len(payload) > MAX_REF_BYTES:
+        raise HTTPException(status_code=400,
+                            detail=f"音频过大（{len(payload) / 1048576:.1f} MB，"
+                                   f"上限 {MAX_REF_BYTES // 1048576} MB）")
+    wav_bytes = normalize_reference(payload, file.filename or "")
+
+    REFS_DIR.mkdir(parents=True, exist_ok=True)
+    # 按内容哈希命名：同一段音频反复拖进来只占一份，路径也天然是 ASCII
+    target = REFS_DIR / (hashlib.sha1(wav_bytes).hexdigest()[:16] + ".wav")
+    if not target.is_file():
+        target.write_bytes(wav_bytes)
+
+    try:
+        dbfs, _duration, _rate = probe_audio(target)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"无法解析音频: {exc}") from exc
+
+    started = time.perf_counter()
+    with _LOCK:
+        try:
+            wav = synth_wav_ref(target, ref_text, text, instruction, guidance_scale, seed)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")[:400]
+            raise HTTPException(status_code=502, detail=f"Breeze 后端错误 {exc.code}: {detail}") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"无法连接 Breeze 后端: {exc}") from exc
+
+    elapsed = time.perf_counter() - started
+    return _wav_response(wav, elapsed, "临时参考：" + (file.filename or target.name),
+                         guidance_scale, seed, loudness_warning(dbfs))
+
+
+def _wav_response(wav: bytes, elapsed: float, label: str,
+                  guidance_scale: float, seed: int,
+                  ref_warning: str | None = None) -> Response:
     # CORS 头由 CORSMiddleware 统一注入，这里不再重复设置以免出现重复头。
     # 注意：HTTP 头必须能按 latin-1 编码，中文音色名（如「旁白.wav」）直接塞进去会抛
     # UnicodeEncodeError -> 500。这里做 URL 编码。
-    return Response(
-        content=wav,
-        media_type="audio/wav",
-        headers={
-            "X-Breeze-Voice": quote(voice.id, safe=""),
-            "X-Breeze-Guidance": str(guidance_scale),
-            "X-Breeze-Seed": str(seed),
-            "X-Breeze-Wall-Ms": f"{elapsed * 1000:.0f}",
-        },
-    )
+    headers = {
+        "X-Breeze-Voice": quote(label, safe=""),
+        "X-Breeze-Guidance": str(guidance_scale),
+        "X-Breeze-Seed": str(seed),
+        "X-Breeze-Wall-Ms": f"{elapsed * 1000:.0f}",
+    }
+    # 只有临时参考那条路会带这个：音色库里的音色在管理页已经标过响度了
+    if ref_warning:
+        headers["X-Breeze-Ref-Warning"] = quote(ref_warning, safe="")
+    return Response(content=wav, media_type="audio/wav", headers=headers)
 
 
 @app.get("/", response_class=HTMLResponse)
