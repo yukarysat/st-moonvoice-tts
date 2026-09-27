@@ -42,9 +42,9 @@
         volume: 1.0,
         parsingMode: 'gal', // 'gal' | 'audiobook' | 'rp'
         enableInline: true,
-        autoInference: false,
+        autoInference: true,
         autoPlay: false,
-        streamingPlay: false,
+        streamingPlay: true,
         streamingSkipCount: 1,
         // 相邻音频之间的停顿（秒）。
         // 旧版是 rpSentenceDelay / galSentenceDelay 两个按模式分开的字段，默认留空等于不延迟，
@@ -3270,8 +3270,10 @@
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-auto-play">推理完毕后自动续播</label><input type="checkbox" id="breezetts2-auto-play"${settings.autoPlay === true ? ' checked' : ''}></div>
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-streaming-play">推理完N句后自动续播</label><input type="checkbox" id="breezetts2-streaming-play"${settings.streamingPlay === true ? ' checked' : ''}></div>
                             <div class="breezetts2-setting-row" id="breezetts2-streaming-skip-row" style="${settings.streamingPlay !== true ? 'display: none;' : ''}"><label for="breezetts2-streaming-skip-count">推理句数</label><div style="display: flex; align-items: center; gap: 8px;"><input type="number" id="breezetts2-streaming-skip-count" class="text_pole" min="1" max="50" value="${settings.streamingSkipCount || 1}" style="width: 80px;"><span style="font-size: 0.85em; opacity: 0.7;">句（1=即时播放，2=推理2句后播放...）</span></div></div>
-                            <!-- 正则过滤 -->
-                            <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-regex-enable">启用正则过滤</label><input type="checkbox" id="breezetts2-regex-enable"${settings.regexFilter?.enabled ? ' checked' : ''}></div>
+                            <!-- 自定义正则过滤：开启后会**替代**听书模式的内置硬过滤（见 index.js:1223），
+                                 名字不能叫「启用正则过滤」——那会让人以为不开就没有过滤。 -->
+                            <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-regex-enable">自定义正则过滤</label><input type="checkbox" id="breezetts2-regex-enable"${settings.regexFilter?.enabled ? ' checked' : ''}></div>
+                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">插件本身带过滤（听书模式下会硬过滤 markdown 等装饰内容）。开启这一项就<strong>改用你自己的正则</strong>，内置过滤会被跳过。</div>
                             <div class="breezetts2-setting-row" id="breezetts2-regex-row" style="${settings.regexFilter?.enabled ? '' : 'display: none;'}"><label style="flex: 0 0 auto; margin-right: 8px;">正则表达式</label><input type="text" id="breezetts2-regex-pattern" class="text_pole" value="${settings.regexFilter?.pattern || ''}" placeholder="粘贴正则表达式" style="flex: 1;"><button class="menu_button" id="breezetts2-regex-test" title="测试正则">🧪</button></div>
                             <div class="breezetts2-setting-row" id="breezetts2-regex-preview-row" style="${settings.regexFilter?.enabled ? 'font-size: 0.85em; opacity: 0.8;' : 'display: none;'}"><span>过滤预览: </span><span id="breezetts2-regex-preview">无</span></div>
                             <div class="breezetts2-setting-row"><label>默认朗读音色</label><input type="text" id="breezetts2-voice" class="text_pole" value="${settings.defaultVoice}"></div>

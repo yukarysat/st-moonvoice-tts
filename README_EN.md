@@ -226,9 +226,9 @@ A playback bar independent of the chat log, with separate volume for voice and a
 | Default voice | empty | Empty means the first voice in the library; prefer setting it in the dubbing panel |
 | Parsing mode | `gal` | `gal` / `audiobook` / `rp` sentence-splitting strategies |
 | Inline playback | on | Click-to-read in the chat log |
-| Auto inference | off | Synthesise every new reply automatically |
+| Auto inference | on | Synthesise every new reply automatically |
 | Auto play | off | Play as soon as synthesis finishes |
-| Streaming | off | Synthesise while generating |
+| Streaming | on | Synthesise while generating |
 | Streaming threshold | 1 | Sentences to accumulate before starting |
 | Sentence gap | 0.25 s | `segmentGap` |
 | Speaker-change gap | 0.35 s | `speakerChangeGap` |
@@ -240,7 +240,7 @@ A playback bar independent of the chat log, with separate volume for voice and a
 | Event volume | 0.6 | Independent of ambience |
 | Floating player | on | |
 | Prompt injection | off | Injects the built-in format spec at the configured depth |
-| Regex filter | off | Cleans the text before playback |
+| Regex filter | off | Turning it on **replaces the built-in filtering** (audiobook mode hard-filters markdown and similar decoration) with your own regex |
 
 ## Scene audio layout
 
@@ -341,7 +341,7 @@ The backend takes tens of seconds to load the model (the first request is slow),
 Check the transcript first: it must match the spoken words **exactly**, filler words included. Also, reference clips containing shouting noticeably drag the whole result down.
 
 **A line was not read aloud**
-It probably was not recognised as dialogue. Check it against the [output format](#output-format) — especially the two brackets at the start of the line. If the regex filter is on, check that it is not eating the line.
+It probably was not recognised as dialogue. Check it against the [output format](#output-format) — especially the two brackets at the start of the line. If the custom regex filter is on, check that it is not eating the line.
 
 **The ambience will not stop**
 Write `[]` (empty brackets) as the scene name. Note that the scene name must match **exactly** for playback to continue: `雨声` → `雨声_室内` restarts.
