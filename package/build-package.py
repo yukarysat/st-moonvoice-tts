@@ -425,6 +425,9 @@ def main() -> int:
                     help="清空 data\\ 并重新铺样例音色与场景音效。"
                          "默认保留 data\\ —— 用户在工作台里保存的音色就在那里，"
                          "重建包不能把它删掉。")
+    ap.add_argument("--strict-samples", action="store_true",
+                    help="data\\voices 里的音色必须**恰好**是 SAMPLE_VOICES 登记的那 22 个，"
+                         "多一个少一个都中止。发布前建议加上。")
     args = ap.parse_args()
     link = not args.no_link
 
@@ -567,6 +570,40 @@ def main() -> int:
             print(f"    {b}")
         return 1
     print(f"  全部 {len(REQUIRED)} 项就位 [OK]")
+
+    # ---- 反向校验：随包音色必须"恰好"是 SAMPLE_VOICES 那 22 个 ----
+    # 只查「必需文件在不在」是不够的。踩过的坑：验收套件里的 17-test-sidecar.py 会把
+    # 测试音色上传到 127.0.0.1:7881，如果那时 7881 上跑的是**整合包实例**而不是开发实例，
+    # 这些音色就落进了这里的 data/voices —— 结果作者自己的私有音色被一起发出去
+    # （实测：诗雨04 / 星弥02 各一对 wav+json，其中还没有逐字稿）。
+    # 所以组装完要反过来点名：多出来的东西会随包分发，必须让打包的人看见。
+    voices_dir = TARGET / "data" / "voices"
+    expected = {stem for _, stem in SAMPLE_VOICES}
+    found_wavs = {p.stem: p for p in voices_dir.rglob("*.wav")}
+    extra = sorted(set(found_wavs) - expected)
+    samples_missing = sorted(expected - set(found_wavs))
+    if extra or samples_missing:
+        print()
+        print("  " + "!" * 62)
+        if samples_missing:
+            print(f"  !! 少了 {len(samples_missing)} 个样例音色：{'、'.join(samples_missing)}")
+        if extra:
+            print(f"  !! data/voices 里有 {len(extra)} 个不在 SAMPLE_VOICES 里的音色，"
+                  f"它们**会随包一起发出去**：")
+            for stem in extra:
+                wav = found_wavs[stem]
+                has_txt = wav.with_suffix(".txt").is_file()
+                print(f"       {wav.relative_to(TARGET)}"
+                      f"{'（有逐字稿）' if has_txt else '（没有逐字稿 → 用户会看到“缺稿”）'}")
+            print("     如果这些是你自己的音色，删掉它们或改用 --reset-data 重铺样例；")
+            print("     如果确实要随包分发，请先在 SAMPLE_VOICES 里登记，并确认有权分发。")
+        print("  " + "!" * 62)
+        if args.strict_samples:
+            print("  [失败] --strict-samples：样例集不符合预期，中止。")
+            return 1
+        print("  （继续组装；加 --strict-samples 可让这种情况直接失败）")
+    else:
+        print(f"  data/voices 恰好是 {len(expected)} 个登记样例 [OK]")
 
     # ---- 体积 ----
     print("\n--- 11) 体积 ---")
