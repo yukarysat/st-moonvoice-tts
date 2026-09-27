@@ -348,12 +348,6 @@ The sidecar or backend is not up. Try `curl http://127.0.0.1:7881/health`, then 
 **It works in the workbench but not in SillyTavern**
 The three endpoints are wrong, or the sidecar was started after the page loaded (the extension does not reconnect) — reload SillyTavern.
 
-**Nothing works on the phone, but the phone's browser can open the workbench**
-You are almost certainly using a **third-party Android app** (a Tauri-based SillyTavern build). Such apps
-block cleartext HTTP, so the requests the extension sends to the sidecar are stopped inside the app and the
-sidecar never even logs them — it is not a configuration problem. **Open SillyTavern in the phone's browser
-instead**; third-party apps are not recommended.
-
 **Synthesis is slow**
 The backend takes tens of seconds to load the model (the first request is slow), after which one sentence costs roughly as long as the audio itself. Insufficient VRAM degrades it badly — check the backend log for OOM.
 
@@ -374,7 +368,6 @@ Are the library tags accurate? Scoring depends entirely on the `gender-age` tag.
 
 ## Known limitations
 
-- **Third-party Android apps are not recommended** (Tauri-based SillyTavern builds): they block cleartext HTTP, so the extension's `http://` requests are stopped inside the app and the sidecar never even logs them. **Use the phone's browser to open SillyTavern**
 - **The backend must be obtained separately** — use the MoonVoice package, or deploy Breeze TTS 2 yourself
 - **The extraction path must be pure ASCII** (a package-side constraint, see [step 1](#1-get-the-all-in-one-package))
 - **Transcripts are mandatory** — Breeze is noticeably more sensitive to this than IndexTTS2
