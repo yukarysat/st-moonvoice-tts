@@ -45,6 +45,11 @@
 
 ### 其他修复
 
+- `manifest.json` 加上 `"auto_update": true`：本扩展会被纳入 SillyTavern 的
+  「全部更新」按钮与每日更新提示（提示需在 ST 里勾选「通知更新」，默认关），
+  并且在 **SillyTavern 自身版本更新后**随其它扩展一起自动拉取。
+  注意 ST 的机制是「比较 git 提交」，与这里的版本号无关；扩展列表里的更新按钮
+  本来就会在有新提交时出现
 - 删掉 `/api/v1/scene_audios` 响应里写死的 `directory` 字段（值是作者开发时的目录名，
   对整合包用户是错的，且无人消费）
 - 修掉 `server/build-exe.cmd` 是 LF 行尾导致 cmd.exe 解析错位、**构建脚本根本跑不起来**的问题

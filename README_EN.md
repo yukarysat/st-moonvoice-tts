@@ -119,6 +119,14 @@ git clone https://github.com/yukarysat/st-moonvoice-tts.git ST-MoonVoice
 The directory **must** be named `ST-MoonVoice`: SillyTavern discovers extensions by folder, and the extension uses that name to locate itself.
 Restart SillyTavern; it should appear in the extension list as 「古木兆月:月声-TTS」.
 
+**About updates:** SillyTavern decides whether an extension has a new version by **comparing git
+commits** (not by comparing version numbers), so as long as this folder was created with
+`git clone`, an update button appears in the extensions panel when there are new commits.
+This extension also declares `auto_update` in `manifest.json`, so it is included in SillyTavern's
+"Update all" and in the daily update notice (the notice requires "notify updates" to be enabled).
+**If you copied the files in from somewhere else it is not a git repository and will never get an
+update button** — just `git clone` it instead.
+
 ### 3. Prepare a voice
 
 Open the workbench's **voice library** tab. The package already ships 22 sample voices you can use as-is. To build your own, upload a reference clip (**5–15 s, clean single speaker, no background music**) and **type in a transcript that matches the spoken words exactly**.

@@ -122,6 +122,12 @@ git clone https://github.com/yukarysat/st-moonvoice-tts.git ST-MoonVoice
 目录名必须是 `ST-MoonVoice`——SillyTavern 按文件夹发现扩展，插件内部也用它定位自己。
 重启 SillyTavern 后，扩展列表里应能看到「古木兆月:月声-TTS」。
 
+**关于更新**：SillyTavern 判断扩展有没有新版靠的是**比较 git 提交**（不是比较版本号），
+所以只要这个文件夹是用 `git clone` 装的，打开扩展面板时若有新提交就会显示更新按钮。
+本扩展在 `manifest.json` 里声明了 `auto_update`，因此也会被纳入 ST 的「全部更新」
+与每日更新提示（提示需在 ST 里勾选「通知更新」）。
+**如果你是从别处拷贝文件进去的，它不是 git 仓库，永远不会有更新按钮**——重新 `git clone` 一次即可。
+
 ### 3. 准备音色
 
 切到工作台的 **「音色库」** 页。整合包已经带了 22 个示例音色，可以直接用；
