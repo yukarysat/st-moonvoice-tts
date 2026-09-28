@@ -25,7 +25,8 @@ set "BACKEND=%ROOT%\backend"
 set "SIDECAR=%ROOT%\sidecar"
 set "DATA=%ROOT%\data"
 set "BACKEND_EXE=%BACKEND%\runtime\audiocpp_server.exe"
-set "GGUF=%BACKEND%\models\Breeze-TTS-2-GGUF\breeze-tts-2-bf16.gguf"
+REM 模型路径不再写死在这里：由 :ensure_model 扫 backend\models 下的 *.gguf 决定，
+REM 这样用户把下载的模型丢进去就能换档，不用改任何配置。
 set "SIDECAR_EXE=%SIDECAR%\moonvoice-sidecar.exe"
 
 set "HAVECURL="
@@ -73,16 +74,6 @@ if not exist "%BACKEND_EXE%" (
     pause
     exit /b 9
 )
-if not exist "%GGUF%" (
-    echo.
-    echo   [错误] 找不到模型文件：
-    echo          %GGUF%
-    echo.
-    echo   整合包可能没有解压完整。模型约 6.8 GB，请确认下载与解压都完成。
-    echo.
-    pause
-    exit /b 9
-)
 if not exist "%SIDECAR_EXE%" (
     echo.
     echo   [错误] 找不到服务程序：
@@ -93,6 +84,8 @@ if not exist "%SIDECAR_EXE%" (
     pause
     exit /b 9
 )
+call :ensure_model
+if errorlevel 1 exit /b 9
 if not exist "%DATA%" mkdir "%DATA%" >nul 2>&1
 if not exist "%DATA%\voices" mkdir "%DATA%\voices" >nul 2>&1
 if not exist "%DATA%\pjy" mkdir "%DATA%\pjy" >nul 2>&1
@@ -130,6 +123,94 @@ set "GO="
 set /p "GO=仍要尝试继续吗？(y/N) "
 if /i "%GO%"=="y" exit /b 0
 exit /b 1
+
+
+REM ===========================================================================
+REM  :ensure_model —— 挑一个模型用，并把路径写进 backend\server.json
+REM      目录里只有一个就直用它；有多个则按显存自动挑最好的那一档；
+REM      一个都没有时给出下载指引（而不是让后端报 failed to open GGUF）。
+REM ===========================================================================
+:ensure_model
+set "MOONVOICE_ROOT=%ROOT%"
+set "MPTMP=%TEMP%\mv_model_%RANDOM%.txt"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0_helper.ps1" -Action pickmodel > "%MPTMP%" 2>nul
+set "MPICK="
+if exist "%MPTMP%" set /p MPICK=<"%MPTMP%"
+del "%MPTMP%" >nul 2>&1
+
+if /i "%MPICK%"=="NOMODEL" goto model_none
+if /i "%MPICK%"=="NOCONFIG" goto model_none
+
+set "M_NAME="
+set "M_NEED="
+set "M_TOTAL="
+set "M_COUNT="
+set "M_WARN="
+for /f "tokens=1-6 delims=;" %%a in ("%MPICK%") do (
+    set "M_STAT=%%a"
+    set "M_NAME=%%b"
+    set "M_NEED=%%c"
+    set "M_TOTAL=%%d"
+    set "M_COUNT=%%e"
+    set "M_WARN=%%f"
+)
+if /i "%M_STAT%"=="BAD" goto model_bad
+if /i "%M_STAT%"=="WRITEFAIL" goto model_writefail
+if not defined M_NAME (
+    echo   [警告] 模型检查返回了意外结果，仍按配置里的路径启动
+    exit /b 0
+)
+echo   模型：%M_NAME%   需要约 %M_NEED% MiB 显存
+if not "%M_TOTAL%"=="0" echo   显卡 %M_TOTAL% MiB，模型目录里有 %M_COUNT% 个档位
+if /i "%M_WARN%"=="tight" echo   [警告] 显存可能不够，建议只留更小的一档
+if /i "%M_WARN%"=="nogpu" echo   [注意] 读不到显卡显存，若启动失败请换小一档
+exit /b 0
+
+:model_bad
+echo.
+echo   ============================================================
+echo    [错误] 这个文件不是有效的 GGUF 模型
+echo   ============================================================
+echo.
+echo          %M_NAME%
+echo.
+echo     多半是下载没完成。请重新下载完整的 .gguf 文件放回：
+echo          %BACKEND%\models\Breeze-TTS-2-GGUF\
+echo.
+pause
+exit /b 9
+
+:model_writefail
+echo.
+echo   [错误] 无法把模型路径写入 %BACKEND%\server.json
+echo.
+echo     请确认这个文件夹没有被设为只读，也没有被其它程序占用。
+echo.
+pause
+exit /b 9
+
+:model_none
+echo.
+echo   ============================================================
+echo    [错误] 没有找到模型文件
+echo   ============================================================
+echo.
+echo     这个目录里没有任何 .gguf 模型：
+echo          %BACKEND%\models\Breeze-TTS-2-GGUF\
+echo.
+echo     本整合包**不含模型**，请按 readme.txt 的「模型」一节下载一档，
+echo     把 .gguf 文件放进上面那个目录，然后重新双击本文件 ——
+echo     不用改任何设置，放哪个就用哪个。
+echo.
+echo     各档位大致对应（显存按"模型大小 + 约 0.25 GB"估算，另需给桌面留余量）：
+echo          bf16   约 6.8 GB   质量最好，建议 12 GB 以上显存
+echo          q8_0   约 4.6 GB   8 GB 显存流畅
+echo          q6_k   约 4.5 GB   8 GB 显存流畅
+echo          q5_k   约 4.3 GB   6 GB 显存可用
+echo          q4_k   约 4.0 GB   6 GB 显存从容，音质略有损失
+echo.
+pause
+exit /b 9
 
 
 REM ===========================================================================

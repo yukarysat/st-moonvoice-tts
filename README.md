@@ -70,21 +70,65 @@
 
 ### 1. 拿到整合包
 
-**月声整合包下载：** [百度网盘](https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy)
+**下载：** [百度网盘](https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy)
 
-- 文件名：`MoonVoice-1.2.7-moonvoice.5.zip`
-- 大小：6.28 GB（6,737,760,712 字节）
-- SHA256：`11b08fe567bff3e89a671fb5ee3f44a4923452dcbd7e2ed064e97f8a2b1f04d6`
+分开打包成了三种文件，按需取用：
 
-下完建议对一下哈希，Windows 自带命令就够，不用装东西：
+| 文件 | 大小 | 说明 |
+| --- | ---: | --- |
+| `MoonVoice-1.2.7-moonvoice.5.zip` | 6.28 GiB | **满血包**：代码 + bf16 模型，解压即用 |
+| `MoonVoice-1.2.7-moonvoice.5-nomodel.zip` | 0.85 GiB | **无模型包**：只有代码，模型自己选 |
+| `MoonVoice-model-bf16.zip` | 5.42 GiB | bf16 模型（原版精度） |
+| `MoonVoice-model-q8_0.zip` | 4.05 GiB | q8_0 |
+| `MoonVoice-model-q6_k.zip` | 3.89 GiB | q6_k |
+| `MoonVoice-model-q5_k.zip` | 3.63 GiB | q5_k（**推荐**） |
+| `MoonVoice-model-q4_k.zip` | 3.36 GiB | q4_k |
+
+**怎么选**：想省事就下满血包；网盘限速、或想省硬盘空间，就下「无模型包 + 一档模型包」。
+
+模型包解压出来是一个 `backend\` 目录，**直接拖进整合包根目录**即可（Windows 会问是否
+合并，同意就行），不用改任何配置。启动器会扫 `backend\models\Breeze-TTS-2-GGUF\`，
+读你的显卡显存**自动挑最好的一档**并打印出来；想固定用某一档，就只留那一个文件。
+
+| 档位 | 需要显存 | 适合显卡 | 音质 |
+| --- | ---: | --- | --- |
+| bf16 | 约 7.1 GB | 12 GB 以上 | 最好（原版） |
+| q8_0 | 约 4.9 GB | 8 GB | 与 bf16 听不出差别 |
+| q6_k | 约 4.8 GB | 8 GB | 与 bf16 听不出差别 |
+| q5_k | 约 4.5 GB | 6 GB | 与 bf16 听不出差别（**推荐**） |
+| q4_k | 约 4.3 GB | 6 GB 更从容 | 略有损失，可以接受 |
+
+显存按「模型文件大小 + 0.25 GB」估算，另需给桌面留 1 GB 左右。更小的 `q3_k` 已实测
+**音质明显退化**，不提供；**4 GB 显存的显卡任何一档都装不下**，那种机器只能走 CPU 模式。
+
+下完建议对一下哈希（Windows 自带 `certutil`，不用装东西）：
 
 ```
 certutil -hashfile MoonVoice-1.2.7-moonvoice.5.zip SHA256
 ```
 
-这个包里有 6.8 GB 的模型，下载过程中坏掉一点，后端就会报
-`failed to open GGUF file ... (No such file or directory)` 这类完全看不出原因的错误。
-花几秒对一下值得。
+满血包（`MoonVoice-1.2.7-moonvoice.5.zip`）：
+
+```
+3c8a23c1f2419e42e7b15b23eb17411ddd6e0c88602e40b6e6fed5bc84cb5b01
+```
+
+<details>
+<summary>其余 6 个文件的 SHA256</summary>
+
+```
+c827aa30f1ba1a23cd9f71487277e307e2badfe29d80aa4210098232104b6042  MoonVoice-1.2.7-moonvoice.5-nomodel.zip
+74a9a5abe3e22d5bd63073aef28f9f60cca610132d55bebb1c27aad1cd4bd1ed  MoonVoice-model-bf16.zip
+0d368a32ab16664f4b479528d91110cf25c543c6390c2f9532ab8a7b3a682b7a  MoonVoice-model-q8_0.zip
+ba92952f9b684a49fe80bdf996c8738e02263c8a035ec72620c3f9e53e7e0993  MoonVoice-model-q6_k.zip
+6a4cacbab0deffc2d4881a40cd14f79f98adac195064ea4e3b1405d961eb74eb  MoonVoice-model-q5_k.zip
+148b4ccf150a1f6dbb58b4549801620eb7714155f95cd0a5089c193d1f498ff6  MoonVoice-model-q4_k.zip
+```
+
+</details>
+
+模型有 4~7 GB，下载过程中坏掉一点，后端就会报 `failed to open GGUF file ...`
+这类完全看不出原因的错误。花几秒对一下值得。
 
 整合包是**独立可用的语音生成工具**，本身不依赖本插件：解压后双击就能用浏览器合成语音。
 本插件只是把它的能力接进 SillyTavern。

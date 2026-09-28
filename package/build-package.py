@@ -149,7 +149,12 @@ def sidecar_version() -> str:
 
 
 _VER = sidecar_version()
-ZIP_PATH = HERE / (f"MoonVoice-{_VER}.zip" if _VER else "MoonVoice.zip")
+# 下面这几个在 main() 里按产物形态（含模型 / 无模型 / 指定档位）确定
+MODEL_SRC: Path | None = None          # 要放进包的模型源文件；None = 无模型包
+MODEL_DST_REL: Path | None = None      # 它在包内的相对路径
+MODEL_REQUIRED = ""                    # 校验必需文件时用（无模型包为空）
+ZIP_NAME = ""
+ZIP_PATH = HERE / "MoonVoice.zip"
 
 REQUIRED = [
     "readme.txt",
@@ -167,7 +172,7 @@ REQUIRED = [
     "backend/runtime/audiocpp_server.exe",
     "backend/runtime/audiocpp_cli.exe",
     "backend/server.json",
-    "backend/models/Breeze-TTS-2-GGUF/breeze-tts-2-bf16.gguf",
+    # 模型不在这个固定清单里：含模型 / 无模型两种形态由 MODEL_REQUIRED 决定
     "sidecar/moonvoice-sidecar.exe",
     # 随包样例音色：解压就有声音可用
     "data/voices/_说明.txt",
@@ -454,6 +459,15 @@ def main() -> int:
     ap.add_argument("--strict-samples", action="store_true",
                     help="data\\voices 里的音色必须**恰好**是 SAMPLE_VOICES 登记的那 22 个，"
                          "多一个少一个都中止。发布前建议加上。")
+    ap.add_argument("--no-model", action="store_true",
+                    help="不放入任何模型，产出「无模型整合包」：用户自己下载某一档 .gguf 放进 "
+                         "backend\\models\\Breeze-TTS-2-GGUF\\，启动器会按显存自动挑。")
+    ap.add_argument("--model", metavar="GGUF", default="",
+                    help="放入指定的 .gguf（默认用来源目录里的 bf16）。"
+                         "配合 --zip-name 产出「代码 + 指定档位」的整合包。")
+    ap.add_argument("--zip-name", metavar="NAME", default="",
+                    help="zip 文件名（不含目录）。默认：含 bf16 时用 MoonVoice-<版本>.zip；"
+                         "--no-model 时加 -nomodel 后缀。")
     args = ap.parse_args()
     link = not args.no_link
 
@@ -472,8 +486,27 @@ def main() -> int:
     if not AUDIOCPP.is_dir():
         raise SystemExit(f"[中止] {AUDIOCPP} 不存在。--src 指错了吗？")
 
+    # ---- 产物形态：含模型 / 无模型 ----
+    global MODEL_SRC, MODEL_DST_REL, ZIP_NAME, ZIP_PATH, MODEL_REQUIRED
+    if args.no_model:
+        MODEL_SRC, MODEL_DST_REL = None, None
+        ZIP_NAME = args.zip_name or (f"MoonVoice-{_VER}-nomodel.zip" if _VER else "MoonVoice-nomodel.zip")
+    else:
+        MODEL_SRC = Path(args.model).expanduser().resolve() if args.model else (AUDIOCPP / MODEL_REL)
+        if not MODEL_SRC.is_file():
+            raise SystemExit(f"[中止] 找不到模型文件：{MODEL_SRC}")
+        # 目标文件名沿用源文件名：这样 --model 换成任何一档，包内路径都是对的
+        MODEL_DST_REL = Path("models") / "Breeze-TTS-2-GGUF" / MODEL_SRC.name
+        ZIP_NAME = args.zip_name or (f"MoonVoice-{_VER}.zip" if _VER else "MoonVoice.zip")
+    # MODEL_DST_REL 是**相对 backend\** 的（server.json 里就要这个形式），
+    # 而必需文件检查是相对包根目录的，所以这里必须补上 backend/ 前缀。
+    MODEL_REQUIRED = (f"backend/{MODEL_DST_REL.as_posix()}" if MODEL_DST_REL else "")
+    ZIP_PATH = HERE / ZIP_NAME
+
     print("=" * 62)
     print("  组装 月声整合包")
+    print(f"  形态: {'无模型（用户自行下载）' if MODEL_SRC is None else MODEL_SRC.name}"
+          + (f"    zip: {ZIP_NAME}" if args.zip else ""))
     print("=" * 62)
     print(f"  目标: {TARGET}")
     print(f"  来源: {DEPLOY}")
@@ -482,15 +515,17 @@ def main() -> int:
 
     # ---- 前置检查 ----
     missing = []
-    for p in (AUDIOCPP / "runtime" / "audiocpp_server.exe",
-              AUDIOCPP / MODEL_REL,
-              AUDIOCPP / "server.json",
-              MODEL_LICENSE_SRC,
-              SIDECAR_EXE,
-              HERE / "readme.txt",
-              HERE / "launchers" / "_moonvoice.cmd",
-              HERE / "docs" / "使用说明.md",
-              HERE / "docs" / "NOTICE"):
+    precheck_paths = [AUDIOCPP / "runtime" / "audiocpp_server.exe",
+                      AUDIOCPP / "server.json",
+                      MODEL_LICENSE_SRC,
+                      SIDECAR_EXE,
+                      HERE / "readme.txt",
+                      HERE / "launchers" / "_moonvoice.cmd",
+                      HERE / "docs" / "使用说明.md",
+                      HERE / "docs" / "NOTICE"]
+    if MODEL_SRC is not None:
+        precheck_paths.insert(1, MODEL_SRC)
+    for p in precheck_paths:
         if not p.exists():
             missing.append(str(p))
     if missing:
@@ -528,7 +563,12 @@ def main() -> int:
     n = place_tree(AUDIOCPP / "runtime", TARGET / "backend" / "runtime", link)
 
     print("--- 2) 模型 ---")
-    place(AUDIOCPP / MODEL_REL, TARGET / "backend" / MODEL_REL, link, [])
+    if MODEL_SRC is None:
+        print("    无模型包：跳过。用户按 readme.txt 的「模型」一节自行下载一档放进")
+        print(f"    {TARGET / 'backend' / 'models' / 'Breeze-TTS-2-GGUF'}")
+        (TARGET / "backend" / "models" / "Breeze-TTS-2-GGUF").mkdir(parents=True, exist_ok=True)
+    else:
+        place(MODEL_SRC, TARGET / "backend" / MODEL_DST_REL, link, [])
 
     print("--- 3) 后端配置与第三方许可 ---")
     place(AUDIOCPP / "server.json", TARGET / "backend" / "server.json", False, [])
@@ -589,13 +629,18 @@ def main() -> int:
 
     # ---- 校验 ----
     print("\n--- 10) 校验必需文件 ---")
-    bad = [r for r in REQUIRED if not (TARGET / r).exists()]
+    required = list(REQUIRED)
+    if MODEL_REQUIRED:
+        required.append(MODEL_REQUIRED)
+    bad = [r for r in required if not (TARGET / r).exists()]
     if bad:
         print("  [失败] 缺少：")
         for b in bad:
             print(f"    {b}")
         return 1
-    print(f"  全部 {len(REQUIRED)} 项就位 [OK]")
+    print(f"  全部 {len(required)} 项就位 [OK]")
+    if not MODEL_REQUIRED:
+        print("  无模型包：backend/models 下不会有 .gguf（由用户自行放入）")
 
     # ---- 反向校验：随包音色必须"恰好"是 SAMPLE_VOICES 那 22 个 ----
     # 只查「必需文件在不在」是不够的。踩过的坑：验收套件里的 17-test-sidecar.py 会把

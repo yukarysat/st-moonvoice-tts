@@ -43,6 +43,7 @@ dist/
 package/*
 !package/build-package.py
 !package/make-launchers.py
+!package/make-model-zip.py
 !package/readme.txt
 !package/docs/
 !package/launchers/

@@ -74,21 +74,69 @@ Four steps. No command line, no Python.
 
 ### 1. Get the all-in-one package
 
-**MoonVoice package download:** [Baidu Pan](https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy)
+**Download:** [Baidu Pan](https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy)
 
-- File: `MoonVoice-1.2.7-moonvoice.5.zip`
-- Size: 6.28 GB (6,737,760,712 bytes)
-- SHA256: `11b08fe567bff3e89a671fb5ee3f44a4923452dcbd7e2ed064e97f8a2b1f04d6`
+Packaged separately; grab what you need:
 
-Verify it after downloading — `certutil` ships with Windows, nothing to install:
+| File | Size | What it is |
+| --- | ---: | --- |
+| `MoonVoice-1.2.7-moonvoice.5.zip` | 6.28 GiB | **Full package**: code + bf16 model, ready to run |
+| `MoonVoice-1.2.7-moonvoice.5-nomodel.zip` | 0.85 GiB | **No-model package**: code only, bring your own model |
+| `MoonVoice-model-bf16.zip` | 5.42 GiB | bf16 model (original precision) |
+| `MoonVoice-model-q8_0.zip` | 4.05 GiB | q8_0 |
+| `MoonVoice-model-q6_k.zip` | 3.89 GiB | q6_k |
+| `MoonVoice-model-q5_k.zip` | 3.63 GiB | q5_k (**recommended**) |
+| `MoonVoice-model-q4_k.zip` | 3.36 GiB | q4_k |
+
+**Which to pick:** the full package is the easiest. If your cloud drive throttles downloads or
+you want to save disk, take the no-model package plus one model package.
+
+A model package extracts to a `backend\` folder — **drag it into the package root** (Windows
+will offer to merge; accept). No configuration needed: the launcher scans
+`backend\models\Breeze-TTS-2-GGUF\`, reads your VRAM and **picks the best tier that fits**,
+printing which one it chose. To pin one tier, keep only that file.
+
+| Tier | VRAM needed | Suitable GPU | Quality |
+| --- | ---: | --- | --- |
+| bf16 | ~7.1 GB | 12 GB+ | best (original) |
+| q8_0 | ~4.9 GB | 8 GB | indistinguishable from bf16 |
+| q6_k | ~4.8 GB | 8 GB | indistinguishable from bf16 |
+| q5_k | ~4.5 GB | 6 GB | indistinguishable from bf16 (**recommended**) |
+| q4_k | ~4.3 GB | 6 GB, with headroom | slight loss, acceptable |
+
+VRAM ≈ model file size + 0.25 GB, plus ~1 GB for the desktop. The smaller `q3_k` is **not
+shipped** — it measurably degrades quality. **No tier fits a 4 GB card**; those machines can
+only use CPU mode.
+
+Verify after downloading — `certutil` ships with Windows, nothing to install:
 
 ```
 certutil -hashfile MoonVoice-1.2.7-moonvoice.5.zip SHA256
 ```
 
-The archive contains a 6.8 GB model. A partially corrupted download makes the backend fail
-with something like `failed to open GGUF file ... (No such file or directory)`, which gives
-no hint about the real cause.
+Full package (`MoonVoice-1.2.7-moonvoice.5.zip`):
+
+```
+3c8a23c1f2419e42e7b15b23eb17411ddd6e0c88602e40b6e6fed5bc84cb5b01
+```
+
+<details>
+<summary>SHA256 of the other 6 files</summary>
+
+```
+c827aa30f1ba1a23cd9f71487277e307e2badfe29d80aa4210098232104b6042  MoonVoice-1.2.7-moonvoice.5-nomodel.zip
+74a9a5abe3e22d5bd63073aef28f9f60cca610132d55bebb1c27aad1cd4bd1ed  MoonVoice-model-bf16.zip
+0d368a32ab16664f4b479528d91110cf25c543c6390c2f9532ab8a7b3a682b7a  MoonVoice-model-q8_0.zip
+ba92952f9b684a49fe80bdf996c8738e02263c8a035ec72620c3f9e53e7e0993  MoonVoice-model-q6_k.zip
+6a4cacbab0deffc2d4881a40cd14f79f98adac195064ea4e3b1405d961eb74eb  MoonVoice-model-q5_k.zip
+148b4ccf150a1f6dbb58b4549801620eb7714155f95cd0a5089c193d1f498ff6  MoonVoice-model-q4_k.zip
+```
+
+</details>
+
+The models are 4–7 GB; a partially corrupted download makes the backend fail with something
+like `failed to open GGUF file ...`, which gives no hint about the real cause. Worth the few
+seconds.
 
 The package is a **standalone voice-generation tool** — it does not need this extension. Extract it, double-click, and you can synthesise speech in a browser. This extension merely wires that capability into SillyTavern.
 
