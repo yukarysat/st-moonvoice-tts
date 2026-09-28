@@ -76,10 +76,7 @@ Four steps. No command line, no Python.
 
 **Download:** [Baidu Pan](https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy)
 
-The link opens a **folder** containing the files below — download only what you need.
-(It is a shared folder, so the link stays valid when the contents are updated.)
-
-Packaged separately:
+Packaged separately; grab what you need:
 
 | File | Size | What it is |
 | --- | ---: | --- |
