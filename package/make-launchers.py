@@ -356,7 +356,9 @@ echo.
 echo    后端只是合成引擎。日常使用请双击「启动webui.cmd」，
 echo    它会顺带把后端一起拉起来。
 echo.
-pause
+REM 成功路径刻意不暂停：这里没有任何需要用户阅读或抄写的内容，窗口应当自动关掉。
+REM 失败路径（找不到文件、后端起不来）仍然 pause —— 那时候窗口一闪而过
+REM 等于一点信息都没给用户。
 exit /b 0
 
 
@@ -384,11 +386,12 @@ echo     后端界面：                 http://127.0.0.1:7870/
 echo.
 echo     酒馆里不用改任何设置，默认就指向本机 7881。
 echo.
-echo     本窗口可以关闭，服务会在后台继续运行。
+echo     本窗口会自动关闭，服务在后台继续运行（各自有自己的窗口）。
 echo     要关闭服务请双击「停止全部.cmd」。
 echo.
+REM 浏览器会自动打开，那就是"启动成功"的信号；这里没有要用户抄的地址，所以不暂停。
+REM 后端与侧车都是用 start 另开的窗口，本窗口关掉不影响它们。
 start "" "http://127.0.0.1:7881/"
-pause
 exit /b 0
 
 
@@ -481,6 +484,12 @@ if defined R1 echo   [警告] 7881 仍在监听
 if defined R2 echo   [警告] 7870 仍在监听
 if not defined R1 if not defined R2 echo   已全部停止 [OK]
 echo.
+REM 停干净了就自动关窗；只有真没停掉时才留下窗口 —— 上面那两行警告是用户唯一
+REM 能看出"没停干净"的地方，窗口一闪而过等于把警告吞掉了。
+if defined R1 goto stop_hold
+if defined R2 goto stop_hold
+exit /b 0
+:stop_hold
 pause
 exit /b 0
 """
