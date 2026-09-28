@@ -74,7 +74,7 @@ Four steps. No command line, no Python.
 
 ### 1. Get the all-in-one package
 
-**Download:** [Baidu Pan](https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy)
+**Download:** [Baidu Pan](https://pan.baidu.com/s/1HSvLnRerE5uHEehqH1FMMQ?pwd=gmzy)
 
 Packaged separately; grab what you need:
 

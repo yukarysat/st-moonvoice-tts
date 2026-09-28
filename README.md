@@ -70,7 +70,7 @@
 
 ### 1. 拿到整合包
 
-**下载：** [百度网盘](https://pan.baidu.com/s/1FHAQ-Et6lmyZgU-TKMrtwQ?pwd=gmzy)
+**下载：** [百度网盘](https://pan.baidu.com/s/1HSvLnRerE5uHEehqH1FMMQ?pwd=gmzy)
 
 分开打包成了三种文件，按需取用：
 
