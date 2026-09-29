@@ -148,7 +148,7 @@ After extraction you get:
 | `sidecar/` | `moonvoice-sidecar.exe` — the voice-library and scene-audio interface layer |
 | `data/` | Voice library and scene audio (22 sample voices, 9 sample sounds) |
 | `文档/` | Manuals, NOTICE, upstream licences |
-| `启动后端.cmd` | Starts the inference server (port `7870`) |
+| `启动后端.cmd` | Exactly the same as 启动webui, but **does not open the workbench page**. Use it when you only need the extension |
 | `启动webui.cmd` | Starts the sidecar and opens the workbench (port `7881`) |
 | `启动局域网服务.cmd` | Sidecar on `0.0.0.0`, for phones and tablets |
 | `停止全部.cmd` | Stops everything started above |
@@ -162,12 +162,12 @@ After extraction you get:
 
 Then double-click:
 
-1. `启动后端.cmd` — **the first launch takes tens of seconds** (it loads a ~7 GB model). Wait for the listening message. **Leave this window open.**
-2. `启动webui.cmd` — starts the sidecar and opens the workbench at <http://127.0.0.1:7881/>. **Leave it open too.**
+1. `启动webui.cmd` — checks paths, starts the inference server (**the first launch loads a ~7 GB model; wait tens of seconds**), starts the sidecar, and opens the workbench at <http://127.0.0.1:7881/>. The launcher window **closes itself** when done, leaving two minimised service windows (「月声后端」/「月声侧车」) — leave those running.
+2. If you only use the SillyTavern extension and never need the workbench page, run `启动后端.cmd` instead: it does exactly the same thing, but does not open a browser.
 
 To check the pipeline before touching SillyTavern, pick a sample voice on the workbench's synthesis tab, type a line, and hit synthesise. If you hear something, both the backend and the sidecar are fine.
 
-When you are done, run `停止全部.cmd` or just close the two console windows.
+When you are done, run `停止全部.cmd` or just close the two service windows.
 
 ### 2. Install the extension
 
