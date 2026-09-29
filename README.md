@@ -5,7 +5,7 @@
 角色的台词与旁白会被自动切分、逐句合成、连贯播放。**情感不是从固定词表里挑，而是由大模型直接用自然语言描述该怎么念**，再原样作为合成指令传给 Breeze——情绪表现力的上限因此从「几十个词」变成「任意描述」。
 
 > **本插件只有「嘴」，没有「嗓子」。** 真正做推理的服务在配套的**月声整合包**里
-> （解压即用、免装 Python，约 7.9 GB）。整合包 + 本插件装好，几分钟就能出声，
+> （解压即用、免装 Python；满血包约 7.9 GB，也可只下无模型包 + 一档模型）。整合包 + 本插件装好，几分钟就能出声，
 > 步骤见[快速开始](#快速开始)。
 
 > ### 关于出处（请务必阅读）
@@ -107,17 +107,17 @@
 certutil -hashfile MoonVoice-1.2.7-moonvoice.5.zip SHA256
 ```
 
-满血包（`MoonVoice-1.2.7-moonvoice.5.zip`）：
+**满血包**（`MoonVoice-1.2.7-moonvoice.5.zip`）的哈希是：
 
 ```
-3c8a23c1f2419e42e7b15b23eb17411ddd6e0c88602e40b6e6fed5bc84cb5b01
+e8ca0c8bffa305fa0c015f50a47cbf52ab5543377a2fda78b80b077949919dae  MoonVoice-1.2.7-moonvoice.5.zip
 ```
 
 <details>
 <summary>其余 6 个文件的 SHA256</summary>
 
 ```
-c827aa30f1ba1a23cd9f71487277e307e2badfe29d80aa4210098232104b6042  MoonVoice-1.2.7-moonvoice.5-nomodel.zip
+d9e81a5297a2d6a421ef6959f550050886ec93743554b06ac9c8e0e19d93551c  MoonVoice-1.2.7-moonvoice.5-nomodel.zip
 74a9a5abe3e22d5bd63073aef28f9f60cca610132d55bebb1c27aad1cd4bd1ed  MoonVoice-model-bf16.zip
 0d368a32ab16664f4b479528d91110cf25c543c6390c2f9532ab8a7b3a682b7a  MoonVoice-model-q8_0.zip
 ba92952f9b684a49fe80bdf996c8738e02263c8a035ec72620c3f9e53e7e0993  MoonVoice-model-q6_k.zip

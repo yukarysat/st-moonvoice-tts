@@ -5,7 +5,8 @@ A read-aloud extension for [SillyTavern](https://github.com/SillyTavern/SillyTav
 Character dialogue and narration are split into sentences, synthesised one by one, and played back gaplessly. **Emotion is not picked from a fixed word list** — the LLM describes in plain language how a line should be delivered, and that description is passed through verbatim as the synthesis instruction. The ceiling on expressiveness therefore goes from "a few dozen words" to "anything you can describe".
 
 > **This extension is a mouth, not a voice box.** The actual inference server lives in the companion
-> **MoonVoice all-in-one package** (extract and run, no Python required, ~7.9 GB).
+> **MoonVoice all-in-one package** (extract and run, no Python required; ~7.9 GB for the full
+> package, or download the no-model package plus one model tier).
 > Install the package plus this extension and you are making sound within minutes —
 > see [Quick start](#quick-start).
 
@@ -117,14 +118,14 @@ certutil -hashfile MoonVoice-1.2.7-moonvoice.5.zip SHA256
 Full package (`MoonVoice-1.2.7-moonvoice.5.zip`):
 
 ```
-3c8a23c1f2419e42e7b15b23eb17411ddd6e0c88602e40b6e6fed5bc84cb5b01
+e8ca0c8bffa305fa0c015f50a47cbf52ab5543377a2fda78b80b077949919dae  MoonVoice-1.2.7-moonvoice.5.zip
 ```
 
 <details>
 <summary>SHA256 of the other 6 files</summary>
 
 ```
-c827aa30f1ba1a23cd9f71487277e307e2badfe29d80aa4210098232104b6042  MoonVoice-1.2.7-moonvoice.5-nomodel.zip
+d9e81a5297a2d6a421ef6959f550050886ec93743554b06ac9c8e0e19d93551c  MoonVoice-1.2.7-moonvoice.5-nomodel.zip
 74a9a5abe3e22d5bd63073aef28f9f60cca610132d55bebb1c27aad1cd4bd1ed  MoonVoice-model-bf16.zip
 0d368a32ab16664f4b479528d91110cf25c543c6390c2f9532ab8a7b3a682b7a  MoonVoice-model-q8_0.zip
 ba92952f9b684a49fe80bdf996c8738e02263c8a035ec72620c3f9e53e7e0993  MoonVoice-model-q6_k.zip
