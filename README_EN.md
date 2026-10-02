@@ -256,6 +256,19 @@ Every spoken line goes on its own line, in this shape:
 The extension ships an injectable prompt describing all of this. It is **on by default**.
 Its scene list is **aligned one-to-one with the nine sounds shipped in the package**, so scene audio works out of the box. To add or remove sounds afterwards, edit the **Available-sound list** field (Prompt management tab) — that field is **yours and is never overwritten** by an update (see [Scene audio layout](#scene-audio-layout)).
 
+### Don't want `[character][emotion][scene]` tags showing in chat?
+
+Hide them with **SillyTavern's own regex feature**. No extension setting is involved:
+
+1. Open **Extensions (🧩) → Regex → New "Global" Regex**
+2. Find: `\[[^\]\n]*\]` — Replace with: empty
+3. **Tick "Only Format Display"** ← the key part: it changes only what the chat UI renders, the chat file itself is untouched
+4. Save
+
+**In GAL / RP mode the extension reads the raw message text** (`chat[i].mes`), not the rendered display layer, so hiding the tags does **not** affect what gets spoken. **Audiobook mode is the opposite** — it reads the rendered content, so hiding tags there would hide them from the reader too. This trick is for GAL / RP mode.
+
+> Don't confuse this with the extension's own **custom regex filter** setting: that one filters **the text sent to TTS** (enabling it skips the built-in hard filter used by audiobook mode). It controls *what gets read*, not *what gets displayed*. The "Only Format Display" option lives in **SillyTavern's** regex extension, not in this extension's settings panel.
+
 ## Main features
 
 ### Sentence-by-sentence playback and gaps
