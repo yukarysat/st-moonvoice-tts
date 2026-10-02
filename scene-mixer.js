@@ -137,19 +137,23 @@ export function catalogFromLegacy(data, toUrl = rel => rel, exts = SCENE_EXTS) {
 
 /**
  * 混音状态。**每次播放（一条播放队列）开始时用 createMixState() 重置** ——
- * 打断造成的静音不该跨消息留着，否则"重新播放"时车一直是熄火的。
+ * 上一轮的事件名记忆不该跨消息留着。
  *
  *   name        该轨当前请求的名字（null = 已停）
- *   mutedName   该轨被打断时正在播的名字。同名的后续请求不再重启它，
- *               直到请求换成别的名字（或显式清空场景）才解除。
  *   lastName    事件轨上一次见到的场景名，用于 onSceneChange 判定。
+ *
+ * 关于"被打断之后同名会不会重启"：**会重启**。曾经有过一版"记住被打断时的名字、
+ * 同名不再起播"的设计（为的是让打断效果在模型照抄同一个环境名时活下来），但作者实测
+ * 认为代价更大：模型没法表达"车子重新启动"，只能靠换名字或先写 `[]` 绕。现在的取舍是
+ * **同名就重启**，作者按需把环境名起得明确一些（例如用 车辆引擎声 而不是 车辆_行驶）。
  */
 export function createMixState() {
     const st = { lastName: {} };
     for (const r of AMBIENT_RULES) {
-        st[r.id] = { name: null, mutedName: null };
+        st[r.id] = { name: null };
     }
     for (const r of EVENT_RULES) {
+        st[r.id] = st[r.id] || {};
         st.lastName[r.id] = null;
     }
     return st;
@@ -159,7 +163,7 @@ function cloneState(state) {
     const next = { lastName: { ...(state.lastName || {}) } };
     for (const r of AMBIENT_RULES) {
         const s = state[r.id] || {};
-        next[r.id] = { name: s.name ?? null, mutedName: s.mutedName ?? null };
+        next[r.id] = { name: s.name ?? null };
     }
     return next;
 }
@@ -183,16 +187,15 @@ export function planScene(state, rawName, catalog) {
     const actions = [];
 
     // ---- 空标签 `[]`：停掉全部循环轨 ----
+    // ---- 空标签 `[]`：停掉全部循环轨 ----
     // 与旧行为一致（旧版 `[]` 就是停掉环境音），只是从一条轨扩到全部循环轨。
-    // 顺便清掉打断造成的静音：作者明确要求"安静"之后，下一次请求应当能正常起播。
     if (!name) {
         for (const r of AMBIENT_RULES) {
             const st = next[r.id];
-            if (st.name !== null || st.mutedName !== null) {
+            if (st.name !== null) {
                 actions.push({ kind: 'ambient-stop', track: r.id, reason: 'cleared' });
             }
             st.name = null;
-            st.mutedName = null;
         }
         return { actions, state: next };
     }
@@ -216,24 +219,19 @@ export function planScene(state, rawName, catalog) {
         const url = catalog[r.id]?.[name];
         if (!url) continue;
         const st = next[r.id];
-        if (st.mutedName === name) {
-            // 被打断后又在请求同一个名字 —— 说明场景没变，就让它安静着。
-            // 这正是"刹车之后车一直停着"的实现方式。
-            continue;
-        }
-        st.mutedName = null;   // 换成别的名字 = 新场景，解除静音
         st.name = name;
         actions.push({ kind: 'ambient', track: r.id, name, url });
     }
 
     // ---- 3) 打断：事件轨触发时停掉它负责的循环轨（同名不打断） ----
+    // 被停掉的轨**不做"记住"**：后面再请求同名就会正常重新起播（作者实测后选的取舍，
+    // 见 createMixState 的注释）。所以这里只发停轨动作、清掉 name 即可。
     for (const target of interruptTargets) {
         const st = next[target];
         const playing = st.name;
         if (!playing) continue;        // 本来就没在播，没什么可打断
         if (playing === name) continue; // 同名不打断自己人（房间底噪 + 开门声这种）
         actions.push({ kind: 'ambient-stop', track: target, reason: 'interrupted' });
-        st.mutedName = playing;        // 记住是谁被停了：同名再来不重启，换名才重启
         st.name = null;
     }
 

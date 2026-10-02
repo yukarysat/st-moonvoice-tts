@@ -321,13 +321,20 @@ the BGM it does **not** interrupt it — same-named sounds are treated as parts 
 **Interruption** — braking stops the car:
 
 ```
-环境音效01/车辆_行驶.ogg    engine (loops)
-事件音效01/刹车.ogg         brake (one-shot)
+环境音效01/车辆引擎声.ogg    engine (loops)
+事件音效01/刹车.ogg          brake (one-shot)
 ```
 
-`[车辆_行驶]` starts the engine; a later line with `[刹车]` plays the brake once and **stops the
-engine**. Even if following lines keep saying `[车辆_行驶]` the engine stays off (the scene has not
-changed — the car is still parked). Use a different name (e.g. `[车辆_起步]`) to start it again.
+`[车辆引擎声]` starts the engine; a later line with `[刹车]` plays the brake once and **stops the
+engine**. Writing `[车辆引擎声]` again **starts it back up** — the same name always restarts. So
+"the car stays parked" is expressed by the script simply not naming the engine again.
+
+> Trade-off: an earlier version kept the interrupted track muted until the scene name changed, so
+> the interruption survived a model that copies the same scene name onto every line. The cost was
+> that the model then had **no way to express "the car starts again"** short of renaming the scene
+> or writing `[]` first. The current choice is same-name-restarts; what you give up is that a
+> repeated scene name only buys one line of silence. Measured against real use, that was the better
+> trade — environment names can be made unambiguous (`车辆引擎声` rather than a vague `车辆_行驶`).
 
 Writing `[]` or omitting the third bracket stops **all loop tracks**.
 
