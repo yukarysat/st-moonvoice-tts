@@ -517,7 +517,13 @@ ST-MoonVoice/
     └─ prompt-versions/      prompt iteration history v1 → v9 (Chinese)
 ```
 
-The assembled package itself (`package/MoonVoice/`, ~7.9 GB) is **not committed** — `package/build-package.py` builds it locally.
+The assembled package itself (~7.9 GB) is **not committed** — `package/build-package.py` builds it locally. It defaults to `package/MoonVoice/`, which sits under SillyTavern's `public/` (SillyTavern serves everything in there as static files), so pass `--target` to put it somewhere shallow and pure-ASCII outside the install:
+
+```
+python package/build-package.py --src <deploy-dir> --target E:\deepseekHarness\BreezeTTS2\MoonVoice --ffmpeg <ffmpeg-path>
+```
+
+Rebuilding after deleting the assembly **requires `--ffmpeg`** (scene audio gets re-transcoded); it is skipped when the transcoded OGGs are already there.
 Development and acceptance-test scripts are intentionally not included either: they depend heavily on the author's local paths.
 
 ## License & attribution

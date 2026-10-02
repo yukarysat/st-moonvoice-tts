@@ -288,6 +288,36 @@ sidecar 会自动准备一份 ASCII 路径的副本再转发，对使用者透�
 
 ---
 
+## 构建整合包
+
+作者本机（`--target` 指到工作区，方便随时双击测新版）：
+
+```bash
+python package/build-package.py --src E:\deepseekHarness\BreezeTTS2 ^
+       --target E:\deepseekHarness\BreezeTTS2\MoonVoice ^
+       --ffmpeg E:\deepseekHarness\Index-tts-2.0-Windows-NVIDIA\index-tts2-nvidia\ffmpeg.exe ^
+       --strict-samples
+# 要发布再加 --zip（约 16 分钟，大头是压缩 6.28 GB）
+```
+
+几条踩过的坑，都写进脚本注释了，这里再列一遍：
+
+- **组装目录不要留在仓库里**。仓库就在酒馆的 `public/scripts/extensions/third-party/` 下，
+  而酒馆会把 `public/` 里的所有文件当静态资源对外提供 —— 8 GB 的组装目录挂在那里既
+  被白送出去、路径又深。脚本默认值仍是 `package/MoonVoice/`，但在 `public` 树里会打印提示。
+- **目标路径必须是纯 ASCII**。后端是 C++ 程序，按 ANSI 代码页打开文件，路径含中文时
+  连模型都读不到（`failed to open GGUF file`）。脚本现在会在打包阶段直接警告。
+- **组装目录被删掉后重建一定要给 `--ffmpeg`**。场景音效是构建时从 WAV 转码的；
+  目录里已有转好的 OGG 时会跳过，所以"以前不带 `--ffmpeg` 也能过"只在那时成立。
+- **组装目录几乎不占空间**：`backend\runtime` 与 `backend\models` 都是硬链接到
+  `<SRC>\audiocpp\` 的同一份数据（名义 8 GB，实际只多出侧车 exe、data 与文档）。
+  同卷移动/删除它都是零成本，随时可重建。
+- **OGG 转码已固定为可复现**（`-serial_offset 0` + `bitexact`）：Ogg 页头里的比特流
+  序列号默认每次随机生成，页 CRC 随之全变，同一文件连转两次哈希都不同 —— 那样
+  "什么都没改、重建一次 zip 哈希也变"，公布哈希给用户对账时会被当成内容动过。
+  注意**已发布的 zip 里仍是旧字节的 OGG**（解码后的 PCM 与新的完全一致，听感无差别），
+  所以"本机组装目录 == 已发布包"这件事要靠 `setup/225-restore-ogg-from-zip.py` 回填才能成立。
+
 ## 故障排查
 
 | 现象 | 原因 |

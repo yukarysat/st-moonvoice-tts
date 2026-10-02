@@ -546,7 +546,16 @@ ST-MoonVoice/
     └─ prompt-versions/     提示词 v1 → v9 的演进记录与取舍说明
 ```
 
-整合包本体（`package/MoonVoice/`，约 7.9 GB）**不入库**，由 `package/build-package.py` 现场装配。
+整合包本体（约 7.9 GB）**不入库**，由 `package/build-package.py` 现场装配。默认装到脚本旁边的
+`package/MoonVoice/`，但那个位置在酒馆的 `public/` 下（酒馆会把里面的文件当静态资源对外提供），
+所以实际用 `--target` 指到酒馆外面一个又浅又纯 ASCII 的目录更好：
+
+```
+python package/build-package.py --src <部署目录> --target E:\deepseekHarness\BreezeTTS2\MoonVoice --ffmpeg <ffmpeg路径>
+```
+
+组装目录被删掉后重建**必须带 `--ffmpeg`**（那会重新转码场景音效）；目录里已有转好的 OGG 时会跳过，
+不带也能过。
 本仓库也不收录开发与验收脚本（它们大量依赖作者本机路径），只收录可分发的产物。
 
 ## 许可与署名

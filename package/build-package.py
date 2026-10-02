@@ -1,15 +1,25 @@
-"""组装「月声整合包」到 package\\MoonVoice\\。
+"""组装「月声整合包」（默认到 package\\MoonVoice\\，可用 --target 指到别处）。
 
 用法：
     set MOONVOICE_SRC=D:\\path\\to\\your\\deploy      # 第三方大件的来源目录，必填
     python build-package.py                 # 硬链接大文件（几乎不占额外空间）
     python build-package.py --no-link       # 老老实实复制（跨盘或想要完全独立时用）
-    python build-package.py --zip           # 顺便打成 月声整合包.zip
+    python build-package.py --zip           # 顺便打成 MoonVoice-<版本>.zip
     python build-package.py --reset-data    # 重铺 data\\（会清掉用户在工作台存的音色）
+    python build-package.py --target E:\\deepseekHarness\\BreezeTTS2\\MoonVoice
+                                            # 装到别处（环境变量 MOONVOICE_TARGET 同效）
+    python build-package.py --no-model      # 产出无模型包
+    python build-package.py --model <gguf>  # 指定放入哪一档模型
+
+**不要把组装目录留在本仓库里**（它就在酒馆的 public\\ 下面）：酒馆会把这些文件当
+静态资源对外提供，路径也深。作者本机用 --target 指到工作区里一个又浅又纯 ASCII 的目录，
+方便随时双击启动器测新版。目标路径含非 ASCII 字符时脚本会直接警告 —— 那是"解压后
+起不来"的头号原因，能在打包阶段拦住就别留给用户。
 
 `--src` / 环境变量 `MOONVOICE_SRC` 指向的目录不在本仓库里（体积 GB 级、模型另有
 许可），需要自己准备，结构见下面 DEPLOY 那一段的注释。`--ffmpeg` / 环境变量
-`FFMPEG` 用于指定 ffmpeg（只在需要转码场景音效时才会找它，包已转好时可以不装）。
+`FFMPEG` 用于指定 ffmpeg：**组装目录被删掉后重建时一定要给**，因为那会用 ffmpeg
+重新转码场景音效（目录里已有转好的 OGG 时才会跳过）。
 
 为什么 staging 目录必须叫 MoonVoice（纯 ASCII）：
     Breeze 后端是 C++ 程序，在 Windows 上按 ANSI 代码页打开文件，路径含中文
@@ -67,6 +77,7 @@ REPO = HERE.parent
 #
 # 用环境变量 MOONVOICE_SRC 或命令行 --src 指定。
 SRC_ENV = "MOONVOICE_SRC"
+TARGET_ENV = "MOONVOICE_TARGET"
 DEPLOY: Path | None = Path(os.environ[SRC_ENV]).expanduser() if os.environ.get(SRC_ENV) else None
 AUDIOCPP: Path = Path()
 MODEL_LICENSE_SRC: Path = Path()
@@ -131,6 +142,9 @@ SAMPLE_VOICES = [
     ("男-老年", "男老02"), ("男-老年", "男老03"),
 ]
 
+# 组装目标目录。main() 里可被 --target / 环境变量 MOONVOICE_TARGET 覆盖。
+# 默认放在脚本旁边（= 酒馆的 public\ 下），但那种位置不合适：酒馆会把它当静态资源
+# 对外提供，路径也深。作者本机一律用 --target 指到工作区。
 TARGET = HERE / "MoonVoice"
 
 
@@ -475,6 +489,10 @@ def main() -> int:
     ap.add_argument("--zip-name", metavar="NAME", default="",
                     help="zip 文件名（不含目录）。默认：含 bf16 时用 MoonVoice-<版本>.zip；"
                          "--no-model 时加 -nomodel 后缀。")
+    ap.add_argument("--target", metavar="DIR", default="",
+                    help="组装到哪个目录（默认 package\\MoonVoice，也可以用环境变量 "
+                         f"{TARGET_ENV}）。建议指到酒馆外面一个又浅又纯 ASCII 的路径，"
+                         "别留在 public\\ 下。")
     args = ap.parse_args()
     link = not args.no_link
 
@@ -492,6 +510,24 @@ def main() -> int:
             "        详见本文件顶部注释。")
     if not AUDIOCPP.is_dir():
         raise SystemExit(f"[中止] {AUDIOCPP} 不存在。--src 指错了吗？")
+
+    # ---- 组装目标目录 ----
+    global TARGET
+    want_target = args.target or os.environ.get(TARGET_ENV, "")
+    if want_target:
+        TARGET = Path(want_target).expanduser().resolve()
+    bad_ascii = [c for c in str(TARGET) if ord(c) > 126]
+    if bad_ascii:
+        # 这不是洁癖：后端按 ANSI 代码页打开文件，路径含中文时连模型都读不到，
+        # 整包一定起不来。能在打包阶段拦住，就别等用户来报。
+        print(f"  [警告] 目标路径含非 ASCII 字符：{''.join(sorted(set(bad_ascii)))}")
+        print(f"         {TARGET}")
+        print("         后端按 ANSI 代码页打开文件，这种路径下读不到模型，包一定起不来。")
+        print("         请换一个纯 ASCII 路径（例如 E:\\deepseekHarness\\BreezeTTS2\\MoonVoice）。")
+    parts_lower = [p.lower() for p in TARGET.parts]
+    if "public" in parts_lower:
+        print("  [提示] 目标目录在酒馆的 public\\ 下面：酒馆会把这些文件当静态资源对外提供，")
+        print("         路径也深不好找。建议用 --target 指到酒馆外面（例如工作区里）。")
 
     # ---- 产物形态：含模型 / 无模型 ----
     global MODEL_SRC, MODEL_DST_REL, ZIP_NAME, ZIP_PATH, MODEL_REQUIRED
