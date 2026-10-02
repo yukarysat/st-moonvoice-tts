@@ -50,7 +50,7 @@ Character dialogue and narration are split into sentences, synthesised one by on
 - **Streaming playback** — starts synthesising while the reply is still being generated
 - **Voice library with transcripts** — an uploaded reference clip must come with a transcript; the sidecar manages both and caches results
 - **Automatic NPC voice assignment** — scored by a `gender-age` tag; deterministic per character name; never cached when the character has no tag
-- **Scene audio** — *ambient* (loops, cross-fades when the scene changes) and *event* (plays once, layered over the ambience)
+- **Scene audio** — four tracks (two loop tracks plus two one-shot kinds). The same name in several folders plays **together**, and Event01 can fire on a scene change and **interrupt** a chosen loop track (a brake cutting the engine)
 - **Configurable gaps** — separate pauses for "between sentences" and "between speakers"
 - **Floating player** — independent volume control for voice and ambience
 - **LAN mode** — a SillyTavern running on your phone can use the Breeze backend on your PC
@@ -294,14 +294,42 @@ When the LLM invents a walk-on character with no voice bound:
 
 ### Scene audio
 
-Two kinds, distinguished by which folder the file sits in:
+Four tracks, distinguished by which folder the file sits in. **When the same name exists in
+several folders, all of them play together** — that is how "room tone + BGM + a door" can sound
+at once while the model still writes a single name.
 
-| Kind | Folder | Behaviour |
+| Track | Folder | Behaviour |
 | --- | --- | --- |
-| Ambient | `<data dir>/pjy/环境音效/`, plus `pjy/` itself | **Loops**; keeps playing while the scene name is unchanged; cross-fades when it changes |
-| Event | `<data dir>/pjy/事件音效/` | Plays **once**, layered over the ambience without interrupting it |
+| Ambient | `pjy/环境音效/`, plus `pjy/` itself | **Loops**; keeps playing while the scene name is unchanged; cross-fades when it changes. **Never interrupted** |
+| Ambient01 | `pjy/环境音效01/` | A second loop track that can play **at the same time** as the one above (put BGM here). **Can be interrupted by Event01** |
+| Event | `pjy/事件音效/` | Plays **once**, layered over the loop tracks, interrupts nothing. Fires on every occurrence (legacy) |
+| Event01 | `pjy/事件音效01/` | Plays **once**; fires **only when the scene name changes** (repeated tags do not retrigger it); **interrupts Ambient01** |
 
-Writing `[]` or omitting the third bracket stops the current ambience.
+Default volumes: ambient 40%, ambient01 30%, event 60% (all adjustable in the settings panel).
+
+**Same name across folders** — all three files named `室内_房间`:
+
+```
+环境音效/室内_房间.ogg      room tone (loops)
+环境音效01/室内_房间.ogg    BGM (loops alongside it)
+事件音效01/室内_房间.ogg    door (fires once on entering)
+```
+
+The model writes `[室内_房间]` and all three start. Because the door has the **same name** as
+the BGM it does **not** interrupt it — same-named sounds are treated as parts of one scene.
+
+**Interruption** — braking stops the car:
+
+```
+环境音效01/车辆_行驶.ogg    engine (loops)
+事件音效01/刹车.ogg         brake (one-shot)
+```
+
+`[车辆_行驶]` starts the engine; a later line with `[刹车]` plays the brake once and **stops the
+engine**. Even if following lines keep saying `[车辆_行驶]` the engine stays off (the scene has not
+changed — the car is still parked). Use a different name (e.g. `[车辆_起步]`) to start it again.
+
+Writing `[]` or omitting the third bracket stops **all loop tracks**.
 
 ### Floating player
 
@@ -344,17 +372,27 @@ Scene audio lives under `pjy/` inside the **data directory**:
 | Package (`启动webui.cmd`) | `<package>\data\` |
 | Sidecar from source | the sidecar's own directory (`server/`), or wherever `--data-dir` points |
 
-Both subfolders are created automatically on first run:
+All four subfolders are created automatically on first run:
 
 ```
 <data dir>/pjy/
-├─ 环境音效/          <- ambient, looping
-├─ 事件音效/          <- event, plays once
+├─ 环境音效/            <- loop track ①: ambience (legacy folder, behaviour unchanged)
+│   └─ 雨声.ogg
+├─ 环境音效01/          <- loop track ②: BGM and anything meant to run alongside ①
+│   └─ 室内_房间.ogg
+├─ 事件音效/            <- one-shot, fires every time, interrupts nothing (legacy folder)
+│   └─ 房间_开门.ogg
+├─ 事件音效01/          <- one-shot, fires on scene change, interrupts 环境音效01
+│   └─ 刹车.ogg
 └─ (files in pjy/ itself also count as ambient)
 ```
 
-Supported: `.mp3` `.wav` `.ogg` `.m4a` `.aac` `.flac`. The name the LLM writes in the brackets is the **filename without extension**.
-On a name collision, `环境音效/` wins.
+Supported: `.mp3` `.wav` `.ogg` `.m4a` `.aac` `.flac` (**extension case does not matter** — `雨声.MP3`
+works). The name the LLM writes in the brackets is the **filename without extension** (the name
+itself is still case-sensitive). With several extensions for one name the order is
+`.mp3` `.wav` `.ogg` `.m4a` `.aac` `.flac`; inside one folder `环境音效/` beats `pjy/` itself.
+
+See [Scene audio](#scene-audio) for the full rules (who may interrupt whom, when events fire).
 
 > **The package ships nine scene sounds**, ready to use. On disk they sit in two folders, but in the
 > prompt they are written into a **single list** — the extension resolves the name to a file, and
