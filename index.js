@@ -3,6 +3,10 @@
 // Derivative works must retain attribution to Thirteen-Moons
 // v1.2.7
 
+// 场景音效的混音规则（纯逻辑，可单测）—— 见 scene-mixer.js。
+// 本文件由酒馆以 type="module" 加载，所以可以直接 import。
+import { TRACK_RULES, createMixState, planScene, isEventName,
+         catalogFromTracks, catalogFromLegacy, emptyCatalog } from './scene-mixer.js';
 (function () {
     // 设置存储键：写进 SillyTavern 的 extension_settings，一旦改动用户配置就会丢，绝不可改
     const extensionName = "st-breezetts2";
@@ -56,10 +60,13 @@
         showFloatingPlayer: true, 
         cacheImportPath: '\\\\SillyTavern\\\\data\\\\TTSsound',
         ambientSoundVolume: 0.4,
+        // 环境音效01（第二条循环轨）的音量。默认比环境音低一点：这一轨通常放 BGM，
+        // 它要垫在人声与环境音之下，跟环境音同音量容易糊成一片。
+        ambient1SoundVolume: 0.3,
         ambientFadeDuration: 0,
         ambientLoopByScene: false,
-        // 事件音（pjy/事件音效/ 下的文件）的音量。事件音不循环、不顶替环境音，
-        // 只是叠上去响一声，所以音量和环境音分开调。
+        // 事件音（pjy/事件音效/ 与 pjy/事件音效01/ 下的文件）的音量。事件音不循环、
+        // 不顶替循环轨，只是叠上去响一声，所以音量和环境音分开调。两个事件文件夹共用这一项。
         eventSoundVolume: 0.6,
         voiceMap: {},
         promptInjection: {
@@ -498,17 +505,43 @@
         return { init, setHandle, getHandle, requestPermission };
     })();
 
-    // ==================== 环境音效播放 ====================
+    // ==================== 场景音效播放 ====================
+    // 规则（谁是谁的轨、谁打断谁、事件什么时候响）在 scene-mixer.js 里，本模块只负责
+    // "取目录 + 按动作操作 Audio 元素"。这样那套规则能被单测覆盖，这里只留播放器该管的事：
+    // 元素生命周期、淡入淡出、随台词暂停、异步请求先后。
     const AmbientPlayer = (function () {
-        let dirHandle = null, currentScene = null, currentAudio = null;
-        let playSceneRequestId = 0; // 防止异步错乱
-        // 是否因为用户暂停播放而暂停了环境音。环境音是循环的，如果暂停时只停台词，
-        // 它会一直在后台响，用户会觉得"关不掉"。
-        let pausedByPlayback = false;
+        // ---------- 状态 ----------
+        let dirHandle = null;
+        // 目录：{ 轨道 id: { 场景名: url } }。去后缀与后缀优先级在 scene-mixer 里做完了。
+        let catalog = null;
+        // 引擎状态：每条循环轨当前请求的名字、被打断后要静音的名字、事件轨上次见到的名字。
+        let mixState = createMixState();
+        // 循环轨的运行态。事件音是 fire-and-forget，不在 playing 里登记。
+        const playing = {};
+        for (const r of TRACK_RULES) if (r.kind === 'ambient') playing[r.id] = { audio: null, name: null };
+        // 事件音（一次性）：两个事件轨共用一个集合，靠自身 ended/error 收尾。
+        const activeEvents = new Set();
+        // 被"随台词暂停"停下的循环轨。只恢复我们自己暂停的那些，避免误播。
+        const pausedByPlayback = new Set();
+        let playSceneRequestId = 0; // 防异步错乱：被更新的请求取代时放弃本次
 
+        function _ruleOf(trackId) { return TRACK_RULES.find(r => r.id === trackId); }
         function _getFadeDuration() { return parseInt(getSettings().ambientFadeDuration ?? 0) || 0; }
+        function _trackVolume(trackId) {
+            const key = _ruleOf(trackId)?.volumeKey || 'ambientSoundVolume';
+            const v = parseFloat(getSettings()[key]);
+            // 缺键时给个安全值：deepMergeDefaults 会补默认值，这里只是兜底不产生 NaN
+            return Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.4));
+        }
+
         async function init() {
             _stopEvents();   // 兜底：清掉上一次初始化可能遗留的事件音元素
+            for (const r of TRACK_RULES) {
+                if (r.kind !== 'ambient') continue;
+                playing[r.id] = { audio: null, name: null };
+            }
+            pausedByPlayback.clear();
+            mixState = createMixState();
             try {
                 const saved = await AudioStorage.getConfig('ambientDirHandle');
                 if (saved) { dirHandle = saved; }
@@ -530,8 +563,8 @@
             } catch (e) { console.warn('[MoonVoice][Ambient] 权限请求失败:', e); }
             return false;
         }
-        function _getVolume() { const s = getSettings(); return Math.max(0, Math.min(1, parseFloat(s.ambientSoundVolume ?? 0.4))); }
-        //独立淡入淡出
+
+        // ---------- 淡入淡出 ----------
         // rAF 句柄必须挂在**音频元素自己**身上，不能用全局变量。全局单变量的三个后果：
         //   1) 新元素的 _fadeOut 会在 _cancelFadeOut 里把**上一个元素**还在跑的淡出取消掉，
         //      那个元素就既不会 pause() 也不会清 src —— 而它是 loop=true 的，
@@ -539,7 +572,7 @@
         //      （实测：三句各换一个场景、淡出 800ms，前两个全被搁置在音量 0.06。）
         //   2) _fadeOut 不会取消同一元素上还在跑的 _fadeIn，两个 rAF 循环会同时改 volume，互相打架。
         //   3) stopImmediate()/setVolume() 里的 _cancelFade() 会误伤无关元素的淡出。
-        // 改成每个元素自己记后，这三个问题一起消失。
+        // 改成每个元素自己记后，这三个问题一起消失。现在有多条循环轨，这一点更关键。
         function _cancelFade(audioEl) {
             if (!audioEl) return;
             if (audioEl._bzFadeOut != null) { cancelAnimationFrame(audioEl._bzFadeOut); audioEl._bzFadeOut = null; }
@@ -561,9 +594,9 @@
             audioEl._bzFadeOut = requestAnimationFrame(step);
         }
 
-        function _fadeIn(audioEl) {
+        /** 淡入到 target。target 由调用方按**该轨的音量**给出 —— 两条循环轨音量可以不同。 */
+        function _fadeIn(audioEl, target) {
             _cancelFade(audioEl);
-            const target = _getVolume();
             const fadeDur = _getFadeDuration();
             if (!fadeDur) { audioEl.volume = target; return; }
             audioEl.volume = 0;
@@ -577,106 +610,114 @@
             audioEl._bzFadeIn = requestAnimationFrame(step);
         }
 
-        // ==================== 场景音列表缓存 ====================
-        // sidecar 按子文件夹区分音效类型，插件据此决定播放方式。
-        // 提示词不需要为"这是环境音还是事件音"做任何特殊标记——模型照常写 [敲门]，
-        // 类型判断完全发生在下游。
-        //   pjy/<名字>.<后缀>          环境音（兼容旧布局）
-        //   pjy/环境音效/<名字>.<后缀>  环境音：循环、顶替上一段、带淡入淡出
-        //   pjy/事件音效/<名字>.<后缀>  事件音：只播一次、不循环、叠在环境音之上
-        let sceneAudioListCache = null;   // { paths: Map<文件名, pjy 下的相对路径>, events: Set<文件名> }
-        let sceneAudioListPromise = null;
-        let sceneAudioListFetchTime = 0;
+        // ==================== 场景音目录 ====================
+        // 侧车按子文件夹分轨道（见 scene-mixer.js 的 TRACK_RULES 与 breeze_api.py 的
+        // SCENE_TRACKS，两边的 id 必须一致）：
+        //   环境音效 / pjy 根目录   -> ambient   循环、顶替上一段（旧行为，永不被事件影响）
+        //   环境音效01              -> ambient1  第二条循环轨，唯一会被事件打断的轨
+        //   事件音效                -> event     只响一次，每次出现都响（旧行为）
+        //   事件音效01              -> event1    场景名变化时响一次，触发时打断 ambient1
+        // 旧版侧车没有 tracks 字段，此时退化成"环境音 + 事件音"两条轨（等同旧插件行为）。
+        let catalogFetchTime = 0;
+        let catalogPromise = null;
         const SCENE_LIST_TTL = 60000;
-        // 后缀列表必须与 sidecar 返回的集合一致，否则列表里会出现插件不会去试的文件
-        const SCENE_EXTS = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
 
-        async function _getSceneAudioList() {
-            if (sceneAudioListCache && (Date.now() - sceneAudioListFetchTime < SCENE_LIST_TTL)) {
-                return sceneAudioListCache;
-            }
-            if (sceneAudioListPromise) return sceneAudioListPromise;
+        function _baseUrl() {
+            const raw = getSettings().apiUrl || 'http://127.0.0.1:7881';
+            return (raw.match(/^(https?:\/\/[^\/]+)/i)?.[0] || 'http://127.0.0.1:7881').replace(/\/$/, '');
+        }
+        // 把「pjy 下的相对路径」转成可用的 URL：逐段编码，保留 / 作为分隔符
+        function _sceneUrl(relPath) {
+            const enc = relPath.split('/').map(s => encodeURIComponent(s)).join('/');
+            return `${_baseUrl()}/pjy/${enc}`;
+        }
 
-            const rawApiUrl = getSettings().apiUrl || 'http://127.0.0.1:7881';
-            const baseUrl = (rawApiUrl.match(/^(https?:\/\/[^\/]+)/i)?.[0] || 'http://127.0.0.1:7881').replace(/\/$/, '');
-
-            sceneAudioListPromise = fetchWithTimeout(`${baseUrl}/api/v1/scene_audios`)
+        async function _getCatalog() {
+            if (catalog && (Date.now() - catalogFetchTime < SCENE_LIST_TTL)) return catalog;
+            if (catalogPromise) return catalogPromise;
+            catalogPromise = fetchWithTimeout(`${_baseUrl()}/api/v1/scene_audios`)
                 .then(res => res.json())
                 .then(data => {
-                    const paths = new Map(Object.entries(data.paths || {}));
-                    const events = new Set(data.events || []);
-                    // 兼容：老版 sidecar 只返回 scenes（全是环境音、且都在根目录）
-                    if (!paths.size && Array.isArray(data.scenes)) {
-                        data.scenes.forEach(n => paths.set(n, n));
-                    }
-                    sceneAudioListCache = { paths, events };
-                    sceneAudioListFetchTime = Date.now();
-                    console.log('[MoonVoice][Ambient] 场景音已加载: 环境音',
-                        paths.size - events.size, '个 / 事件音', events.size, '个');
-                    return sceneAudioListCache;
+                    const toUrl = rel => _sceneUrl(rel);
+                    catalog = (data && data.tracks)
+                        ? catalogFromTracks(data.tracks, toUrl)
+                        : catalogFromLegacy(data, toUrl);
+                    catalogFetchTime = Date.now();
+                    const counts = TRACK_RULES
+                        .map(r => `${r.id} ${Object.keys(catalog[r.id] || {}).length}`).join(' / ');
+                    console.log('[MoonVoice][Ambient] 场景音已加载：', counts);
+                    return catalog;
                 })
                 .catch(e => {
+                    // 失败不写进 catalog：下次调用会重试。返回空目录只是让本次调用安全返回。
                     console.warn('[MoonVoice][Ambient] 获取场景音列表失败，下次重试:', e);
-                    return { paths: new Map(), events: new Set() };
+                    return catalog || emptyCatalog();
                 })
-                .finally(() => {
-                    sceneAudioListPromise = null;
-                });
-            return sceneAudioListPromise;
+                .finally(() => { catalogPromise = null; });
+            return catalogPromise;
         }
 
         async function preloadScenes() {
-            try { await _getSceneAudioList(); } catch (e) { console.warn('[MoonVoice][Ambient] preloadScenes failed:', e); }
-        }
-
-        // 把「pjy 下的相对路径」转成可用的 URL：逐段编码，保留 / 作为分隔符
-        function _sceneUrl(baseUrl, relPath) {
-            const enc = relPath.split('/').map(s => encodeURIComponent(s)).join('/');
-            return `${baseUrl}/pjy/${enc}`;
-        }
-
-        /** 解析场景标签 -> { url, kind: 'ambient' | 'event' }，找不到返回 null */
-        async function _loadScene(sceneName) {
-            if (!sceneName) return null;
-            const rawApiUrl = getSettings().apiUrl || 'http://127.0.0.1:7881';
-            const baseUrl = (rawApiUrl.match(/^(https?:\/\/[^\/]+)/i)?.[0] || 'http://127.0.0.1:7881').replace(/\/$/, '');
-            try {
-                const { paths, events } = await _getSceneAudioList();
-                for (const ext of SCENE_EXTS) {
-                    const name = sceneName + ext;
-                    const rel = paths.get(name);
-                    if (rel) {
-                        return { url: _sceneUrl(baseUrl, rel), kind: events.has(name) ? 'event' : 'ambient' };
-                    }
-                }
-                console.warn('[MoonVoice][Ambient] _loadScene: 没有匹配的场景文件:', sceneName);
-            } catch (e) { console.warn('[MoonVoice][Ambient] 加载场景音错误:', e); }
-            return null;
+            try { await _getCatalog(); } catch (e) { console.warn('[MoonVoice][Ambient] preloadScenes failed:', e); }
         }
 
         /**
-         * 同步判断场景标签是不是事件音——只查已缓存的列表，不发请求。
-         * 播放列表分段时用它把事件音行"跳过"：事件音只是叠上去响一声，
-         * 不该把正在播放的环境音切断重来。列表没加载时按环境音处理（等同旧行为）。
+         * 同步判断这个名字是不是事件音 —— 只查已加载的目录，不发请求。
+         * 播放列表分段时用它把事件音行单独成段：事件音只是叠上去响一声，
+         * 不该把正在播的循环轨切断重来。目录没加载时返回 false（按循环音处理，等同旧行为）。
          */
         function isEventScene(sceneName) {
-            if (!sceneName || !sceneAudioListCache) return false;
-            const { paths, events } = sceneAudioListCache;
-            for (const ext of SCENE_EXTS) {
-                const name = sceneName + ext;
-                if (paths.has(name)) return events.has(name);
+            return isEventName(catalog, sceneName);
+        }
+
+        // ==================== 循环轨 ====================
+        function _playAmbient(trackId, name, url) {
+            const st = playing[trackId];
+            if (!st) return;
+            // 同场景且正在播 -> 保持，不重新加载（旧行为）
+            if (st.name === name && st.audio && !st.audio.paused) return;
+
+            const oldAudio = st.audio;
+            st.name = name;
+            const audio = new Audio(url);
+            audio.loop = true;
+            audio.volume = 0;
+            st.audio = audio;
+            pausedByPlayback.delete(trackId);
+
+            if (oldAudio && !oldAudio.paused) {
+                _fadeOut(oldAudio, null);
+            } else if (oldAudio) {
+                // 已被暂停的旧音效：收掉它身上可能残留的 rAF，别再碰其他元素
+                _cancelFade(oldAudio);
             }
-            return false;
+
+            audio.play().then(() => {
+                if (st.audio === audio) _fadeIn(audio, _trackVolume(trackId));
+            }).catch(e => {
+                console.warn(`[MoonVoice][Ambient] 播放错误（${trackId} / ${name}）:`, e);
+                if (st.audio === audio) { st.audio = null; st.name = null; }
+            });
+        }
+
+        /** 停掉一条循环轨。immediate=true 时不淡出（每句之间的场景转换用）。 */
+        function _stopAmbient(trackId, immediate = false) {
+            const st = playing[trackId];
+            if (!st) return;
+            const audio = st.audio;
+            st.audio = null;
+            st.name = null;
+            pausedByPlayback.delete(trackId);
+            if (!audio) return;
+            if (immediate) { _cancelFade(audio); audio.pause(); audio.src = ''; }
+            else { _fadeOut(audio, null); }
         }
 
         // ==================== 事件音（一次性） ====================
-        // 与环境音是两条独立通道：事件音不循环、不顶替环境音（叠在它之上）、放完自动消失。
-        // 所以敲门、电话铃这类声音响完之后，原本的房间底噪还在继续。
-        const activeEvents = new Set();
-
-        function _playEvent(url) {
-            const s = getSettings();
-            const vol = Math.max(0, Math.min(1, parseFloat(s.eventSoundVolume ?? 0.6)));
+        // 循环轨之外的独立通道：不循环、不顶替循环轨（叠在它们之上）、放完自动消失。
+        // 是否会打断某条循环轨，由规则表决定（目前只有 事件音效01 -> 环境音效01）。
+        function _playEvent(trackId, url) {
+            const vol = _trackVolume(trackId);
             const audio = new Audio(url);
             audio.loop = false;
             audio.volume = vol;
@@ -704,101 +745,97 @@
             activeEvents.clear();
         }
 
+        // ==================== 对外：按场景标签播放 ====================
+        /**
+         * 把"这一句的场景标签"交给规则引擎，再执行它给出的动作。
+         *
+         * 传入空字符串 / null 表示空方括号 `[]` —— 停掉全部循环轨（与旧行为一致）。
+         * 目录还没加载好时会等一次（首次播放常见），期间若有更新的请求到来就放弃本次。
+         */
         async function playScene(sceneName) {
-            if (!sceneName) { stop(); return; }
-
             const requestId = ++playSceneRequestId;
-            const found = await _loadScene(sceneName);
-
+            const cat = catalog || await _getCatalog();
             if (requestId !== playSceneRequestId) {
                 console.log('[MoonVoice][Ambient] playScene: 请求已过期，放弃:', sceneName);
                 return;
             }
-            if (!found) { console.log('[MoonVoice][Ambient] 没有场景文件:', sceneName); return; }
-
-            if (found.kind === 'event') {
-                // 事件音每次出现都要响，所以不做「同场景保持」判断，也不碰环境音的
-                // currentScene/currentAudio —— 它只是叠上去响一声。
-                console.log('[MoonVoice][Ambient] 事件音:', sceneName);
-                _playEvent(found.url);
-                return;
-            }
-
-            // ---- 以下都是环境音 ----
-            // 同场景且正在播放，直接保持，不重新加载
-            if (sceneName === currentScene && currentAudio && !currentAudio.paused) {
-                console.log('[MoonVoice][Ambient] playScene: 同场景，保持播放:', sceneName);
-                return;
-            }
-
-            const url = found.url;
-            const oldAudio = currentAudio;
-            currentScene = sceneName;
-            const audio = new Audio(url);
-            audio.loop = true;
-            audio.volume = 0;
-            currentAudio = audio;
-
-            if (oldAudio && !oldAudio.paused) {
-                _fadeOut(oldAudio, null);
-            } else if (oldAudio) {
-                // 已被暂停的旧音效：收掉它身上可能残留的 rAF，别再碰其他元素
-                _cancelFade(oldAudio);
-            }
-
-            try {
-                console.log('[MoonVoice][Ambient] playScene: 为场景调用 audio.play():', sceneName);
-                await audio.play();
-                if (currentAudio === audio) {
-                    _fadeIn(audio);
-                }
-            } catch (e) {
-                console.warn('[MoonVoice][Ambient] 播放错误:', e);
-                if (currentAudio === audio) {
-                    currentAudio = null;
-                    currentScene = null;
+            const { actions, state } = planScene(mixState, sceneName, cat);
+            mixState = state;
+            for (const a of actions) {
+                if (a.kind === 'ambient') {
+                    _playAmbient(a.track, a.name, a.url);
+                } else if (a.kind === 'ambient-stop') {
+                    console.log(`[MoonVoice][Ambient] 停掉 ${a.track}（${a.reason === 'interrupted' ? '被事件打断' : '清空场景'}）`);
+                    _stopAmbient(a.track, false);
+                } else if (a.kind === 'event') {
+                    console.log(`[MoonVoice][Ambient] 事件音 ${a.track}: ${a.name}`);
+                    _playEvent(a.track, a.url);
                 }
             }
         }
 
+        /** 停止全部循环轨并重置引擎状态（消息播完、或切换播放对象时用）。 */
         function stop() {
             playSceneRequestId++;
-            currentScene = null;
-            pausedByPlayback = false;
-            if (currentAudio) { _fadeOut(currentAudio, null); currentAudio = null; }
+            for (const r of TRACK_RULES) if (r.kind === 'ambient') _stopAmbient(r.id, false);
+            mixState = createMixState();
+            pausedByPlayback.clear();
         }
+        /**
+         * 硬停全部循环轨，**不重置引擎状态**。
+         *
+         * 注意：不改 mixState 是有意的 —— 打断造成的静音要留着；若这里重置，
+         * 每句之间被 stopImmediate 一清，"刹车之后车一直停着"就不成立了。
+         */
         function stopImmediate() {
             playSceneRequestId++;
-            currentScene = null;
-            pausedByPlayback = false;
+            for (const r of TRACK_RULES) if (r.kind === 'ambient') _stopAmbient(r.id, true);
             // 注意：**不**在这里清事件音。stopImmediate() 是每句之间的场景转换用的，
-            // 清掉的话「电话铃」这种比台词长的音效会被下一句拦腰切断。
+            // 清掉的话"电话铃"这种比台词长的音效会被下一句拦腰切断。
             // 事件音是 fire-and-forget，靠自身的 ended/error 收尾。
-            if (currentAudio) { _cancelFade(currentAudio); currentAudio.pause(); currentAudio.src = ''; currentAudio = null; }
         }
-        /** 随台词一起暂停。只作用于循环的环境音；事件音是短音，让它自然响完。 */
+        /** 随台词一起暂停。只作用于循环轨；事件音是短音，让它自然响完。 */
         function pause() {
-            if (!currentAudio || currentAudio.paused) return;
-            pausedByPlayback = true;
-            try { currentAudio.pause(); } catch (e) { /* 忽略 */ }
-            console.log('[MoonVoice][Ambient] 环境音随播放暂停');
+            for (const r of TRACK_RULES) {
+                if (r.kind !== 'ambient') continue;
+                const st = playing[r.id];
+                if (!st || !st.audio || st.audio.paused) continue;
+                pausedByPlayback.add(r.id);
+                try { st.audio.pause(); } catch (e) { /* 忽略 */ }
+            }
+            if (pausedByPlayback.size) console.log('[MoonVoice][Ambient] 循环轨随播放暂停:', [...pausedByPlayback].join(','));
         }
-        /** 随台词一起恢复。只有确实是"被我们暂停的"才恢复，避免误播。 */
+        /** 随台词一起恢复。只恢复确实是被我们暂停的那些，避免误播。 */
         function resume() {
-            const was = pausedByPlayback;
-            pausedByPlayback = false;
-            if (!was || !currentAudio || !currentAudio.paused) return;
-            try {
-                currentAudio.play().catch(e => console.warn('[MoonVoice][Ambient] 恢复环境音失败:', e));
-                console.log('[MoonVoice][Ambient] 环境音随播放恢复');
-            } catch (e) { /* 忽略 */ }
+            const ids = [...pausedByPlayback];
+            pausedByPlayback.clear();
+            for (const id of ids) {
+                const st = playing[id];
+                if (!st || !st.audio || !st.audio.paused) continue;
+                try {
+                    st.audio.play().catch(e => console.warn(`[MoonVoice][Ambient] 恢复 ${id} 失败:`, e));
+                    console.log(`[MoonVoice][Ambient] 循环轨随播放恢复: ${id}`);
+                } catch (e) { /* 忽略 */ }
+            }
         }
-        function setVolume(vol) {
-            const v = Math.max(0, Math.min(1, parseFloat(vol) || 0));
-            const s = getSettings(); s.ambientSoundVolume = v; saveSettings();
-            if (currentAudio && !currentAudio.paused) { _cancelFade(currentAudio); currentAudio.volume = v; }
+
+        /**
+         * 设置音量。
+         *   setVolume(0.5)                 —— 旧签名：作用于环境音轨（播放器窗口的快捷按钮在用）
+         *   setVolume('ambient1', 0.3)     —— 按轨道设置（设置面板用）
+         */
+        function setVolume(a, b) {
+            const trackId = (typeof a === 'string') ? a : 'ambient';
+            const raw = (typeof a === 'string') ? b : a;
+            const v = Math.max(0, Math.min(1, parseFloat(raw) || 0));
+            const s = getSettings();
+            s[_ruleOf(trackId)?.volumeKey || 'ambientSoundVolume'] = v;
+            saveSettings();
+            const st = playing[trackId];
+            if (st && st.audio && !st.audio.paused) { _cancelFade(st.audio); st.audio.volume = v; }
         }
-        function getVolume() { return _getVolume(); }
+        function getVolume(trackId = 'ambient') { return _trackVolume(trackId); }
+
         return { init, preloadScenes, setDirHandle, getDirHandle, requestPermission, playScene, stop, stopImmediate, setVolume, getVolume, isEventScene, pause, resume };
     })();
 
@@ -3347,8 +3384,9 @@
                         <!-- 模块4：背景音效 -->
                         <div class="breezetts2-setting-module">
                             <div class="breezetts2-module-header">🎵 场景音效</div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">音频放在侧车<b>数据目录</b>下的 <b>pjy/</b>（默认与侧车脚本同级，可用 --data-dir 指定）。<b>文件名必须与场景标签完全一致，且区分大小写</b>。子文件夹决定播放方式：<br>· <b>环境音效/</b> 与 <b>pjy/ 根目录</b> —— 循环播放、切换时淡入淡出<br>· <b>事件音效/</b> —— 只响一次、叠在环境音之上（敲门、电话铃这类）<br>提示词不需要区分两者，模型照常写标签即可。</div>
+                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">音频放在侧车<b>数据目录</b>下的 <b>pjy/</b>（默认与侧车脚本同级，可用 --data-dir 指定）。<b>文件名（不含后缀）必须与场景标签完全一致</b>；后缀大小写不敏感。子文件夹决定播放方式：<br>· <b>环境音效/</b> 与 <b>pjy/ 根目录</b> —— 循环播放、切换时淡入淡出；<b>永不被事件打断</b><br>· <b>环境音效01/</b> —— 也是循环轨，可与上一条<b>同时播放</b>（适合放 BGM）；<b>会被 事件音效01 打断</b><br>· <b>事件音效/</b> —— 只响一次、叠在循环音之上；<b>每次出现都响</b>（旧行为）<br>· <b>事件音效01/</b> —— 只响一次；<b>场景名变化时响一次</b>（同名重复的台词不会反复响），触发时打断 环境音效01<br><b>同名跨文件夹会一起播</b>：把 房间底噪 / BGM / 开门声 都命名为 <code>室内_房间</code> 分别放进三个文件夹，模型写 <code>[室内_房间]</code> 时三处同时起。提示词不需要区分文件夹，模型照常写标签即可。</div>
                             <div class="breezetts2-setting-row"><label>环境音音量</label><input type="range" id="breezetts2-ambient-volume" class="breezetts2-slider" min="0" max="1" step="0.05" value="${settings.ambientSoundVolume ?? 0.4}"><span id="breezetts2-ambient-volume-val">${((settings.ambientSoundVolume ?? 0.4) * 100).toFixed(0)}%</span></div>
+                            <div class="breezetts2-setting-row"><label>环境音效01 音量</label><input type="range" id="breezetts2-ambient1-volume" class="breezetts2-slider" min="0" max="1" step="0.05" value="${settings.ambient1SoundVolume ?? 0.3}"><span id="breezetts2-ambient1-volume-val">${((settings.ambient1SoundVolume ?? 0.3) * 100).toFixed(0)}%</span></div>
                             <div class="breezetts2-setting-row"><label>事件音音量</label><input type="range" id="breezetts2-event-volume" class="breezetts2-slider" min="0" max="1" step="0.05" value="${settings.eventSoundVolume ?? 0.6}"><span id="breezetts2-event-volume-val">${((settings.eventSoundVolume ?? 0.6) * 100).toFixed(0)}%</span></div>
                             <div class="breezetts2-setting-row"><label>淡入淡出</label><select id="breezetts2-ambient-fade" class="text_pole"><option value="0"${(settings.ambientFadeDuration ?? 0) == 0 ? ' selected' : ''}>关闭</option><option value="100"${(settings.ambientFadeDuration ?? 0) == 100 ? ' selected' : ''}>0.1 秒</option><option value="200"${(settings.ambientFadeDuration ?? 0) == 200 ? ' selected' : ''}>0.2 秒</option><option value="300"${(settings.ambientFadeDuration ?? 0) == 300 ? ' selected' : ''}>0.3 秒</option><option value="400"${(settings.ambientFadeDuration ?? 0) == 400 ? ' selected' : ''}>0.4 秒</option><option value="500"${(settings.ambientFadeDuration ?? 0) == 500 ? ' selected' : ''}>0.5 秒</option><option value="1000"${(settings.ambientFadeDuration ?? 0) == 1000 ? ' selected' : ''}>1 秒</option><option value="1500"${(settings.ambientFadeDuration ?? 0) == 1500 ? ' selected' : ''}>1.5 秒</option><option value="2000"${(settings.ambientFadeDuration ?? 0) == 2000 ? ' selected' : ''}>2 秒</option><option value="3000"${(settings.ambientFadeDuration ?? 0) == 3000 ? ' selected' : ''}>3 秒</option></select></div>
                             <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">音效文件命名需与场景名称一致，支持 .mp3 / .wav / .ogg / .m4a</div>
@@ -3531,6 +3569,9 @@
 
         const ambVolSlider = panel.querySelector('#breezetts2-ambient-volume');
         if (ambVolSlider) { ambVolSlider.oninput = (e) => { const v = parseFloat(e.target.value); AmbientPlayer.setVolume(v); const disp = panel.querySelector('#breezetts2-ambient-volume-val'); if (disp) disp.textContent = Math.round(v * 100) + '%'; }; }
+        // 环境音效01 是第二条循环轨，音量单独可调（默认 0.3）。按轨道传参。
+        const amb1VolSlider = panel.querySelector('#breezetts2-ambient1-volume');
+        if (amb1VolSlider) { amb1VolSlider.oninput = (e) => { const v = parseFloat(e.target.value); AmbientPlayer.setVolume('ambient1', v); const disp = panel.querySelector('#breezetts2-ambient1-volume-val'); if (disp) disp.textContent = Math.round(v * 100) + '%'; }; }
         const evtVolSlider = panel.querySelector('#breezetts2-event-volume');
         if (evtVolSlider) {
             evtVolSlider.oninput = (e) => {
