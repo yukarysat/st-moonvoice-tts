@@ -374,6 +374,13 @@ def transcode_scene_audio(force: bool = False) -> int:
                "-map_metadata", "-1",      # 清空元数据
                "-ac", "2",                 # 4.0 quad -> 立体声
                "-c:a", "libvorbis", "-q:a", "6",
+               # 让转码结果**逐字节可复现**：Ogg 页头里的比特流序列号默认每次随机生成，
+               # 页 CRC 随之全变。实测同一个文件连转两次，音频完全相同（解码后的 PCM
+               # 哈希一致）却有 0.03% 的字节不同 —— 结果是"什么都没改，重建一次 zip 的
+               # 哈希也会变"，发布时容易让人以为包里内容动过。
+               # 固定 serial_offset 并走 bitexact，两次转码即逐字节相同（已验证），
+               # 且解码后的音频与不加这两个开关时完全一致。
+               "-serial_offset", "0", "-fflags", "+bitexact", "-flags:a", "+bitexact",
                str(dst)]
         r = subprocess.run(cmd, capture_output=True)
         if r.returncode != 0 or not dst.is_file():
