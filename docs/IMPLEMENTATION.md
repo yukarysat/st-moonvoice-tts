@@ -318,6 +318,66 @@ python package/build-package.py --src E:\deepseekHarness\BreezeTTS2 ^
   注意**已发布的 zip 里仍是旧字节的 OGG**（解码后的 PCM 与新的完全一致，听感无差别），
   所以"本机组装目录 == 已发布包"这件事要靠 `setup/225-restore-ogg-from-zip.py` 回填才能成立。
 
+## 测试环境：改动不要拿日常环境去试
+
+作者本机同时跑两套酒馆，**插件改动一律在测试环境里试** —— 日常环境只有那一套，聊天记录、
+设置、扩展状态弄脏了就是真的弄脏了。
+
+| | 日常环境 | 测试环境 |
+| --- | --- | --- |
+| 路径 | `E:\deepseekHarness\SillyTavern\SillyTavern` | `E:\deepseekHarness\SillyTavern-Test` |
+| 端口 | 8123 | **8124** |
+| 启动 | `Start.bat`（每次都跑 `npm install`） | `启动测试酒馆.cmd`（直接 `node server.js`） |
+| 自动开浏览器 | 开 | **关**（免得每次起测试都抢当前窗口） |
+| 数据 | 作者自己的 | 独立副本（聊天记录 / 角色卡 / 设置各一份） |
+| 插件目录 | 本仓库（开发用） | 独立 git 副本，`origin` 指向本仓库 |
+
+### 测一次改动的流程
+
+```bash
+# 1. 在本仓库改完、提交（不必先推 GitHub）
+# 2. 拉进测试环境的插件
+git -C E:\deepseekHarness\SillyTavern-Test\public\scripts\extensions\third-party\ST-MoonVoice pull
+# 3. 刷新浏览器里的 http://127.0.0.1:8124/
+```
+
+测试环境里插件的远程刻意改成了 `origin` = 本仓库路径、`github` = GitHub，所以第 2 步
+不用绕一圈 GitHub；要跟上游对比就 `git fetch github`。
+
+### 语音服务是共用的（这也是要注意的地方）
+
+两套酒馆都连 `127.0.0.1:7881`：
+
+- 起服务：双击 `E:\deepseekHarness\BreezeTTS2\MoonVoice\启动后端.cmd`（新版整包）
+- **别同时起两个后端**：bf16 占约 7.2 GB 显存，16 GB 卡上两个实例装不下
+- **音色库是服务那一侧的，不是酒馆那一侧的**：
+  - 整包服务的库 = `MoonVoice\data\voices`（22 个样例音色）
+  - 开发部署的库 = `BreezeTTS2\plugin\voices`（30 个，含作者私有音色）
+  - 从哪边起服务，插件里就只看到哪一批。要测私有音色就把对应 wav + 同名 txt 复制进整包的
+    `data\voices\` —— **但别就此重打 zip**：`--strict-samples` 会拦下多出来的音色，
+    它正是为了防私有音色被误发出去（这个坑真踩过）
+- 设置（含 `secrets.json`）随副本带过去，同一台机器，不影响安全
+
+### 自检与重建
+
+自检（隔离性、端口错开、插件启用、git 远程、与日常环境的差异面，共 14 项）：
+
+```bash
+python E:\deepseekHarness\BreezeTTS2\setup\222-check-test-env.py
+```
+
+重建（测试环境被弄脏时）：删掉 `E:\deepseekHarness\SillyTavern-Test` 后
+
+1. 确认扩展目录下没有组装残留（组装目录现在在工作区 `BreezeTTS2\MoonVoice`，正常不会有；
+   若曾在 `package\MoonVoice\` 里建过就先删掉，否则会白白多复制 8 GB）
+2. `robocopy E:\deepseekHarness\SillyTavern\SillyTavern E:\deepseekHarness\SillyTavern-Test /E /MT:16`
+3. 改测试环境的 `config.yaml`：`port: 8124`、`browserLaunch.enabled: false`
+4. 测试环境插件目录里改远程：`git remote rename origin github` +
+   `git remote add origin E:\deepseekHarness\SillyTavern\SillyTavern\public\scripts\extensions\third-party\ST-MoonVoice`
+5. 把 `setup\test-env-launcher.cmd`（GBK）复制到测试环境根目录、改名为 `启动测试酒馆.cmd`
+
+已知代价：测试环境是**快照**。以后在日常环境新装扩展，测试环境不会自动有 —— 重新复制或手动装。
+
 ## 故障排查
 
 | 现象 | 原因 |
