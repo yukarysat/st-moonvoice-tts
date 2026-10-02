@@ -103,11 +103,26 @@ REFS_DIR = DATA_DIR / "refs"
 # 场景音效目录。插件按「场景标签名」找 <名字>.<后缀>，所以文件名必须与提示词里的
 # 场景标签完全一致（含大小写）。原版 IndexTTS 的 api.py 也是放在脚本旁边的 pjy/。
 SCENE_AUDIO_DIR = DATA_DIR / "pjy"
-# 两个子文件夹决定播放行为（提示词无需为此改动）：
-#   环境音效 -> 循环、顶替上一段、带淡入淡出
-#   事件音效 -> 只播一次、不循环、叠在环境音之上
+# 四个子文件夹决定播放行为（提示词无需为此改动，模型照常写标签）：
+#   环境音效    -> 循环、顶替上一段、带淡入淡出（旧行为，永不被事件打断）
+#   环境音效01  -> 第二条循环轨：与环境音效**并存**，可被事件音效01 打断
+#   事件音效    -> 只播一次、叠在循环轨之上（旧行为，每次出现都响）
+#   事件音效01  -> 场景名变化时响一次，且**有打断能力**（停掉 环境音效01；同名不打断）
+#
+# 这两组"01"文件夹是给同一场景叠加多层音效用的：把 房间底噪 / BGM / 开门声
+# 分别命名成同一个名字（如 室内_房间）放进不同文件夹，模型写 [室内_房间] 时
+# 三处会一起播。轨道 id 与插件的 scene-mixer.js 里 TRACK_RULES 的 id 必须一致。
 AMBIENT_SUBDIR = "环境音效"
+AMBIENT1_SUBDIR = "环境音效01"
 EVENT_SUBDIR = "事件音效"
+EVENT1_SUBDIR = "事件音效01"
+# 轨道 id -> 文件夹名。根目录的文件也算 ambient（兼容旧布局）。
+SCENE_TRACKS = {
+    "ambient": AMBIENT_SUBDIR,
+    "ambient1": AMBIENT1_SUBDIR,
+    "event": EVENT_SUBDIR,
+    "event1": EVENT1_SUBDIR,
+}
 DEFAULT_BACKEND = "http://127.0.0.1:7870"
 DEFAULT_MODEL = "breeze-tts-2"
 
@@ -513,6 +528,10 @@ async def _origin_guard_middleware(request: Request, call_next):
 # 场景音效的静态托管。插件会用 <baseUrl>/pjy/<文件名> 直接作为 <audio> 的 src，
 # 所以这里必须挂载成静态目录，不能只在 /api/v1/scene_audios 里列名字。
 SCENE_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+# 四个子目录都建出来。README 一直写着"侧车会自动创建"，但代码里从来没做过 ——
+# 用户拿到手只看到一个空的 pjy/，不知道该往哪放、也不知道有几种播放方式。
+for _sub in SCENE_TRACKS.values():
+    (SCENE_AUDIO_DIR / _sub).mkdir(exist_ok=True)
 app.mount("/pjy", StaticFiles(directory=str(SCENE_AUDIO_DIR)), name="pjy")
 
 
@@ -520,16 +539,18 @@ app.mount("/pjy", StaticFiles(directory=str(SCENE_AUDIO_DIR)), name="pjy")
 def get_scene_audios() -> dict:
     """场景音效清单。插件靠它判断某个场景标签有没有文件、以及该按哪种方式播放。
 
-    按子文件夹区分播放行为，**提示词不需要为此改动**：
-
-        pjy/<名字>.<后缀>          环境音：循环、顶替上一段、带淡入淡出
-        pjy/环境音效/<名字>.<后缀>  同上（新布局）
-        pjy/事件音效/<名字>.<后缀>  事件音：只播一次、不循环、叠在环境音之上
-
+    按子文件夹区分播放行为（文件夹名见 SCENE_TRACKS），**提示词不需要为此改动**：
     模型只需要照常写 `[敲门]` 这样的标签，类型判断发生在下游。
 
+    返回里有两套字段：
+
+      · `tracks` / `track_counts` —— 新：四个轨道各自的「名字 -> 相对路径」。
+        同名文件可以分布在多个轨道里，插件会把它们**一起**播（房间底噪 + BGM + 开门声）。
+      · `scenes` / `events` / `paths` —— 旧：两分类视图，供**老版本插件**继续工作。
+        新轨道里的文件也会并进去（老插件会当成普通环境音/事件音播，属于尽力兼容）。
+
     注意插件的匹配是**大小写敏感**的，所以 `.MP3` 这种大写后缀不会被匹配到。
-    重名时以环境音优先。
+    重名时优先级：环境音效（含根目录）> 环境音效01 > 事件音效 > 事件音效01。
     """
     audio_extensions = (".wav", ".mp3", ".flac", ".m4a", ".ogg", ".aac")
 
@@ -546,19 +567,32 @@ def get_scene_audios() -> dict:
         return out
 
     # 根目录也当环境音：兼容旧布局，也符合「没分类的就是背景环境」的直觉
-    ambient = scan("") + scan(AMBIENT_SUBDIR)
-    events = scan(EVENT_SUBDIR)
+    root = scan("")
+    tracks: dict[str, dict[str, str]] = {}
+    for track_id, subdir in SCENE_TRACKS.items():
+        # 环境音轨还包含 pjy 根目录。重名时**子目录优先**：与旧实现一致
+        # （旧代码先收根目录、再让 环境音效/ 覆盖同名项），所以这里把子目录放前面。
+        found = scan(subdir) + list(root) if track_id == "ambient" else scan(subdir)
+        per_track: dict[str, str] = {}
+        for name, rel in found:
+            per_track.setdefault(name, rel)
+        tracks[track_id] = per_track
 
+    # 旧字段：按优先级合成的两分类视图（先放低优先级的，再被高优先级的覆盖）
+    priority = ["event1", "event", "ambient1", "ambient"]
     paths: dict[str, str] = {}
-    for name, rel in events:          # 先放环境音，重名时环境音优先
-        paths.setdefault(name, rel)
-    for name, rel in ambient:
-        paths[name] = rel
+    for track_id in priority:
+        for name, rel in tracks[track_id].items():
+            paths[name] = rel
 
     return {
-        "scenes": sorted({n for n, _ in ambient}),   # 兼容旧字段：环境音文件名
-        "events": sorted({n for n, _ in events}),
-        "paths": paths,                                # 文件名 -> pjy 下的相对路径
+        # ---- 新字段 ----
+        "tracks": tracks,                                  # 轨道 id -> { 名字: 相对路径 }
+        "track_counts": {k: len(v) for k, v in tracks.items()},
+        # ---- 旧字段（老插件继续可用）----
+        "scenes": sorted({n for tid in ("ambient", "ambient1") for n in tracks[tid]}),
+        "events": sorted({n for tid in ("event", "event1") for n in tracks[tid]}),
+        "paths": paths,
         "ambient_dir": AMBIENT_SUBDIR,
         "event_dir": EVENT_SUBDIR,
         "count": len(paths),
