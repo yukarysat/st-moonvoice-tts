@@ -258,16 +258,27 @@ Its scene list is **aligned one-to-one with the nine sounds shipped in the packa
 
 ### Don't want `[character][emotion][scene]` tags showing in chat?
 
-Hide them with **SillyTavern's own regex feature**. No extension setting is involved:
+**Settings panel → 🎵 Scene audio → tick "隐藏聊天里的场景标签" (hide scene tags in chat).** The
+extension manages a **SillyTavern regex** for you (using "Only Format Display"), which means:
 
-1. Open **Extensions (🧩) → Regex → New "Global" Regex**
-2. Find: `\[[^\]\n]*\]` — Replace with: empty
-3. **Tick "Only Format Display"** ← the key part: it changes only what the chat UI renders, the chat file itself is untouched
-4. Save
+- only the **chat bubble rendering** changes — the **chat file and the prompt sent to the model are untouched**
+- **GAL / RP playback is unaffected** (the extension reads the raw `chat[i].mes`, not the display layer)
+- the rule is visible in SillyTavern's Regex extension (named 「月声 · 隐藏场景标签」), so you can edit it yourself
+- **audiobook mode is the exception**: it reads the rendered content, so the tags are filtered there too
 
-**In GAL / RP mode the extension reads the raw message text** (`chat[i].mes`), not the rendered display layer, so hiding the tags does **not** affect what gets spoken. **Audiobook mode is the opposite** — it reads the rendered content, so hiding tags there would hide them from the reader too. This trick is for GAL / RP mode.
+The "filter regex" field accepts two useful patterns out of the box:
 
-> Don't confuse this with the extension's own **custom regex filter** setting: that one filters **the text sent to TTS** (enabling it skips the built-in hard filter used by audiobook mode). It controls *what gets read*, not *what gets displayed*. The "Only Format Display" option lives in **SillyTavern's** regex extension, not in this extension's settings panel.
+| Goal | Regex |
+| --- | --- |
+| Hide all three tags, keep only the line | `\[[^\]\n]*\]` |
+| Hide only the `[scene]` part (keep character and emotion) | `\[[^\]\n]*\](?=\s*[「"“『])` |
+
+> If SillyTavern's **regex extension is disabled**, the rule will not take effect — the settings row
+> says so. The setting is **stored per preset**, so presets can display differently.
+
+> Don't confuse this with the extension's own **custom regex filter** setting: that one filters **the
+> text sent to TTS** (enabling it skips the built-in hard filter used by audiobook mode). It controls
+> *what gets read*, not *what gets displayed*.
 
 ## Main features
 

@@ -425,6 +425,39 @@ python E:\deepseekHarness\BreezeTTS2\setup\222-check-test-env.py
 
 单测脚本（工作区 `setup/228`、`setup/229`）会核对规则表本身与侧车返回的结构。
 
+## 隐藏场景标签：为什么是"托管一条酒馆正则"
+
+设置项在 🎵 场景音效 →「隐藏聊天里的场景标签」，纯逻辑在 `chat-filter.js`（可单测）。
+
+**不自己改 DOM 的理由**：酒馆的正则扩展本来就是这个用途，它有一条已经测好的显示管线 ——
+`markdownOnly` 只作用于显示层，不写回聊天记录、也不进提示词。插件自己插 DOM 会在消息重渲染、
+编辑、swipe 时反复失效，还会跟酒馆的渲染抢方向盘。托管还有个好处：用户能在酒馆的「正则」
+面板里看见这条规则（名字「月声 · 隐藏场景标签」），想改也能改。
+
+**托管 = 只动我们那一条**：id 固定为 `moonvoice-hide-scene-tags`，增删改都按这个 id 找；
+关掉设置时把这条删掉、不留垃圾；`upsertScript()` / `removeScript()` 都是纯函数（返回新数组、
+不修改原列表），单测覆盖了"别人的规则原样保留"。
+
+**读酒馆 `regex/engine.js` 得到的契约**（改动前必须重新核对，酒馆会变）：
+
+| 项 | 值 | 依据 |
+| --- | --- | --- |
+| 脚本存放 | `extension_settings.regex`（数组） | `engine.js` `getRegexScripts()` 的 GLOBAL 分支 |
+| 全局脚本是否需要白名单 | 不需要 | 只有 SCOPED / PRESET 才查 `*_allowed_regex` |
+| 命中显示层 | `markdownOnly: true` **且** `placement.includes(传入值)` | `getRegexedString()` 293-320 行 |
+| 显示管线传的 placement | 1（USER_INPUT）/ 2（AI_OUTPUT） | `script.js:1674` 用 `getRegexPlacement()` |
+| `findRegex` 格式 | `/模式/标志` | 酒馆正则编辑器存的就是这个形式 |
+| 已废弃项 | `regex_placement.MD_DISPLAY`（注释写着 Do not use） | `engine.js:226` |
+| 不进提示词 | `markdownOnly: true` + `promptOnly: false` | 同上的判定式 |
+| depth 限制 | `minDepth/maxDepth = null` 时跳过 | `getRegexedString()` 307-316 行 |
+
+**效果边界**：GAL / RP 读底层 `chat[i].mes`，配音不受影响；**听书模式读渲染后的内容，会一起
+被过滤**（那种模式本来也不需要标签）。酒馆正则扩展被停用（`disabledExtensions` 含 `regex`）时
+规则不生效 —— 面板会提示，`syncSceneTagHiding()` 也返回 `disabled-ext`。
+
+**同步时机**：插件初始化、设置项改动、切换预设（这个设置随预设走）三处调用
+`syncSceneTagHiding()`；内容没变时不写回，避免每次开面板都动一遍 `extension_settings`。
+
 ## 故障排查
 
 | 现象 | 原因 |

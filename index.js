@@ -4,9 +4,12 @@
 // v1.2.7
 
 // 场景音效的混音规则（纯逻辑，可单测）—— 见 scene-mixer.js。
+// 聊天气泡的显示过滤（托管一条酒馆正则）—— 见 chat-filter.js。
 // 本文件由酒馆以 type="module" 加载，所以可以直接 import。
 import { TRACK_RULES, createMixState, planScene, isEventName,
          catalogFromTracks, catalogFromLegacy, emptyCatalog } from './scene-mixer.js';
+import { SCENE_TAG_HIDE_ID, DEFAULT_PATTERN, PATTERN_PRESETS,
+         buildSceneHideScript, upsertScript, removeScript, findScript } from './chat-filter.js';
 (function () {
     // 设置存储键：写进 SillyTavern 的 extension_settings，一旦改动用户配置就会丢，绝不可改
     const extensionName = "st-breezetts2";
@@ -68,6 +71,14 @@ import { TRACK_RULES, createMixState, planScene, isEventName,
         // 事件音（pjy/事件音效/ 与 pjy/事件音效01/ 下的文件）的音量。事件音不循环、
         // 不顶替循环轨，只是叠上去响一声，所以音量和环境音分开调。两个事件文件夹共用这一项。
         eventSoundVolume: 0.6,
+        // 隐藏聊天气泡里的场景标签（[角色|性别][情感][场景]）。由插件托管一条酒馆正则
+        // （markdownOnly = 仅格式显示），所以**聊天记录文件与发给模型的提示词都不变**，
+        // GAL/RP 模式的配音也不受影响（它读的是底层 chat[i].mes）。
+        // 详见 chat-filter.js。
+        sceneTagHiding: {
+            enabled: false,
+            pattern: DEFAULT_PATTERN,
+        },
         voiceMap: {},
         promptInjection: {
             enabled: true,
@@ -312,10 +323,58 @@ import { TRACK_RULES, createMixState, planScene, isEventName,
         if (!root.presets[name]) return;
         root.selected_preset = name;
         saveSettings();
+        syncSceneTagHiding();   // 这个设置是随预设走的，换预设要跟着换规则
         const settingsEl = document.getElementById('breezetts2-settings');
         if (settingsEl) { settingsEl.remove(); injectSettingsPanel(); }
         const modalEl = document.getElementById('breezetts2-modal');
         if (modalEl) { modalEl.remove(); showConfigPopup(); }
+    }
+
+    /**
+     * 把「隐藏场景标签」这个设置同步成一条**酒馆正则**（extension_settings.regex 里我们那条）。
+     *
+     * 为什么托管酒馆正则而不是自己改 DOM：酒馆的正则扩展本来就是这个用途，它有一条已经
+     * 测好的显示管线（markdownOnly 只作用于显示层，不写回聊天记录、也不进提示词）。
+     * 插件自己插 DOM 会在消息重渲染 / 编辑 / swipe 时反复失效，还会跟酒馆的渲染抢方向盘。
+     * 托管还有个好处：用户能在酒馆的「正则」面板里看见这条规则、也能自己改。
+     *
+     * 只增删改 id 为 SCENE_TAG_HIDE_ID 的那一条，**绝不碰用户自己的正则**。
+     * @returns {'ok'|'removed'|'disabled-ext'|'bad-pattern'|'no-context'}
+     */
+    function syncSceneTagHiding() {
+        const ctx = getContext();
+        if (!ctx || !ctx.extensionSettings) return 'no-context';
+        const store = ctx.extensionSettings;
+        const cfg = getSettings().sceneTagHiding || {};
+        const list = Array.isArray(store.regex) ? store.regex : [];
+        const existing = findScript(list);
+
+        if (!cfg.enabled) {
+            // 关掉时把托管的那条删掉，不留垃圾规则
+            if (existing) {
+                store.regex = removeScript(list);
+                saveSettings();
+                console.log('[MoonVoice] 已移除托管的「隐藏场景标签」正则');
+                return 'removed';
+            }
+            return 'removed';
+        }
+        // 酒馆的正则扩展被停用时规则不会生效，提前告诉用户（面板上也会提示）
+        if (Array.isArray(ctx.disabledExtensions) && ctx.disabledExtensions.includes('regex')) {
+            console.warn('[MoonVoice] 酒馆的正则扩展处于停用状态，「隐藏场景标签」不会生效');
+            return 'disabled-ext';
+        }
+        const script = buildSceneHideScript(cfg);
+        if (!script) {
+            console.warn('[MoonVoice] 隐藏场景标签的正则非法，未写入:', cfg.pattern);
+            return 'bad-pattern';
+        }
+        // 内容没变就不写：避免每次开面板都动一遍 extension_settings（也会白触发一次保存）
+        if (existing && JSON.stringify(existing) === JSON.stringify(script)) return 'ok';
+        store.regex = upsertScript(list, script);
+        saveSettings();
+        console.log('[MoonVoice] 已写入托管的「隐藏场景标签」正则:', script.findRegex);
+        return 'ok';
     }
 
     function getCardId() {
@@ -3391,6 +3450,12 @@ import { TRACK_RULES, createMixState, planScene, isEventName,
                             <div class="breezetts2-setting-row"><label>淡入淡出</label><select id="breezetts2-ambient-fade" class="text_pole"><option value="0"${(settings.ambientFadeDuration ?? 0) == 0 ? ' selected' : ''}>关闭</option><option value="100"${(settings.ambientFadeDuration ?? 0) == 100 ? ' selected' : ''}>0.1 秒</option><option value="200"${(settings.ambientFadeDuration ?? 0) == 200 ? ' selected' : ''}>0.2 秒</option><option value="300"${(settings.ambientFadeDuration ?? 0) == 300 ? ' selected' : ''}>0.3 秒</option><option value="400"${(settings.ambientFadeDuration ?? 0) == 400 ? ' selected' : ''}>0.4 秒</option><option value="500"${(settings.ambientFadeDuration ?? 0) == 500 ? ' selected' : ''}>0.5 秒</option><option value="1000"${(settings.ambientFadeDuration ?? 0) == 1000 ? ' selected' : ''}>1 秒</option><option value="1500"${(settings.ambientFadeDuration ?? 0) == 1500 ? ' selected' : ''}>1.5 秒</option><option value="2000"${(settings.ambientFadeDuration ?? 0) == 2000 ? ' selected' : ''}>2 秒</option><option value="3000"${(settings.ambientFadeDuration ?? 0) == 3000 ? ' selected' : ''}>3 秒</option></select></div>
                             <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">音效文件命名需与场景名称一致，支持 .mp3 / .wav / .ogg / .m4a</div>
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-ambient-loop-scene">同场景下循环播放场景音</label><input type="checkbox" id="breezetts2-ambient-loop-scene" ${settings.ambientLoopByScene ? 'checked' : ''}></div>
+                            <!-- 隐藏场景标签：托管一条酒馆正则（仅格式显示），逻辑见 chat-filter.js -->
+                            <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-hide-scene-tags">隐藏聊天里的场景标签</label><input type="checkbox" id="breezetts2-hide-scene-tags" ${settings.sceneTagHiding?.enabled ? 'checked' : ''}></div>
+                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">开启后由插件托管一条酒馆正则（<b>仅格式显示</b>），在酒馆的「正则」扩展里能看到它。只改气泡显示，<b>聊天记录文件与发给模型的提示词都不变</b>，GAL / RP 模式的配音不受影响；听书模式读的是渲染后的内容，会被一起过滤。</div>
+                            <div class="breezetts2-setting-row" id="breezetts2-hide-scene-tags-row" style="${settings.sceneTagHiding?.enabled ? '' : 'display: none;'}"><label style="flex: 0 0 auto; margin-right: 8px;">过滤正则</label><input type="text" id="breezetts2-hide-scene-tags-pattern" class="text_pole" value="${settings.sceneTagHiding?.pattern || ''}" placeholder="\\[[^\\]\\n]*\\]" style="flex: 1;"></div>
+                            <div class="breezetts2-setting-row" id="breezetts2-hide-scene-tags-presets" style="font-size:0.85em; opacity:0.7; ${settings.sceneTagHiding?.enabled ? '' : 'display: none;'}">现成的两个，直接抄进上面那栏：<br>${PATTERN_PRESETS.map(p => `　<code>${p.pattern}</code> —— ${p.label}（${p.note}）`).join('<br>')}</div>
+                            <div class="breezetts2-setting-row" id="breezetts2-hide-scene-tags-status" style="font-size:0.85em;"></div>
                         </div>
                     </div>
                 </div>
@@ -3585,6 +3650,61 @@ import { TRACK_RULES, createMixState, planScene, isEventName,
         if (ambFadeSelect) { ambFadeSelect.onchange = (e) => { const s = getSettings(); s.ambientFadeDuration = parseInt(e.target.value) || 0; saveSettings(); }; }
         const ambLoopSceneChk = panel.querySelector('#breezetts2-ambient-loop-scene');
         if (ambLoopSceneChk) { ambLoopSceneChk.onchange = (e) => { const s = getSettings(); s.ambientLoopByScene = e.target.checked; saveSettings(); }; }
+        // ---- 隐藏场景标签（托管一条酒馆正则，见 chat-filter.js）----
+        const hideTagsChk = panel.querySelector('#breezetts2-hide-scene-tags');
+        const hideTagsRow = panel.querySelector('#breezetts2-hide-scene-tags-row');
+        const hideTagsPresets = panel.querySelector('#breezetts2-hide-scene-tags-presets');
+        const hideTagsInput = panel.querySelector('#breezetts2-hide-scene-tags-pattern');
+        const hideTagsStatus = panel.querySelector('#breezetts2-hide-scene-tags-status');
+        const hideTagsEnsureCfg = () => {
+            const s = getSettings();
+            if (!s.sceneTagHiding || typeof s.sceneTagHiding !== 'object') {
+                s.sceneTagHiding = { enabled: false, pattern: DEFAULT_PATTERN };
+            }
+            return s.sceneTagHiding;
+        };
+        const updateHideTagsStatus = (result) => {
+            if (!hideTagsStatus) return;
+            const ctx = getContext();
+            const extOff = Array.isArray(ctx?.disabledExtensions) && ctx.disabledExtensions.includes('regex');
+            const cfg = hideTagsEnsureCfg();
+            if (!cfg.enabled) { hideTagsStatus.textContent = ''; return; }
+            if (result === 'bad-pattern') {
+                hideTagsStatus.innerHTML = '<b>正则语法错误</b>，这条规则没有写进酒馆。请检查写法（直接写模式，或用 <code>/模式/标志</code>）。';
+                return;
+            }
+            if (result === 'disabled-ext' || extOff) {
+                hideTagsStatus.innerHTML = '⚠️ 酒馆的<b>正则扩展处于停用状态</b>，这条规则不会生效 —— 在上面的「扩展」里把「正则」启用即可。';
+                return;
+            }
+            if (result === 'ok') {
+                hideTagsStatus.textContent = '已生效。酒馆正则面板里可以看到「月声 · 隐藏场景标签」这条规则。';
+                return;
+            }
+            hideTagsStatus.textContent = '';
+        };
+        if (hideTagsChk) {
+            hideTagsChk.onchange = (e) => {
+                const cfg = hideTagsEnsureCfg();
+                cfg.enabled = e.target.checked;
+                saveSettings();
+                if (hideTagsRow) hideTagsRow.style.display = e.target.checked ? '' : 'none';
+                if (hideTagsPresets) hideTagsPresets.style.display = e.target.checked ? '' : 'none';
+                updateHideTagsStatus(syncSceneTagHiding());
+                refreshAllMessages();   // 立即生效：让聊天按新规则重渲染
+            };
+        }
+        if (hideTagsInput) {
+            // 用 onchange 而不是 oninput：每敲一个字就重渲染整个聊天太重了
+            hideTagsInput.onchange = (e) => {
+                const cfg = hideTagsEnsureCfg();
+                cfg.pattern = e.target.value;
+                saveSettings();
+                updateHideTagsStatus(syncSceneTagHiding());
+                refreshAllMessages();
+            };
+        }
+        updateHideTagsStatus(syncSceneTagHiding());
 
         const pathInputEl = panel.querySelector('#breezetts2-local-path');
         const authBtn = panel.querySelector('#breezetts2-auth-btn');
@@ -3930,6 +4050,7 @@ import { TRACK_RULES, createMixState, planScene, isEventName,
         const loadedSettings = getSettings();
         LocalRepo.init();
         AmbientPlayer.init();
+        syncSceneTagHiding();   // 把「隐藏场景标签」对齐成酒馆正则（用户可能在别处删过它）
         setupEventListeners();
         setInterval(polling, 15000); // 低频兜底：覆盖观察器盲区
         setupMutationObserver();
