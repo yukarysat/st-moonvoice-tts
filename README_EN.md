@@ -127,7 +127,7 @@ d9d07dfc99d2840a75dfacba0f9d56a61723731716de47a069b694fb19d1837a  MoonVoice-1.2.
 
 ```
 9a4b30f00319c6e691a01216e179cc4fcb589fcaa8c9d8407af2c569050f86da  MoonVoice-1.2.7-moonvoice.6-nomodel.zip
-81d3a3a89dadfb9e140611f1ffb2c9485315f0cfcaad82628778c51502307f99  MoonVoice-1.2.7-moonvoice.6-update-from-5.zip
+615d20a071c49a7230742c625d53aad6bba4bd9a4fefa8a4ac8bb6489b17a884  MoonVoice-1.2.7-moonvoice.6-update-from-5.zip
 74a9a5abe3e22d5bd63073aef28f9f60cca610132d55bebb1c27aad1cd4bd1ed  MoonVoice-model-bf16.zip
 0d368a32ab16664f4b479528d91110cf25c543c6390c2f9532ab8a7b3a682b7a  MoonVoice-model-q8_0.zip
 ba92952f9b684a49fe80bdf996c8738e02263c8a035ec72620c3f9e53e7e0993  MoonVoice-model-q6_k.zip
