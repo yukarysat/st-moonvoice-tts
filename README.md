@@ -78,6 +78,7 @@
 | --- | ---: | --- |
 | `MoonVoice-1.2.7-moonvoice.6.zip` | 6.28 GiB | **满血包**：代码 + bf16 模型，解压即用 |
 | `MoonVoice-1.2.7-moonvoice.6-nomodel.zip` | 0.85 GiB | **无模型包**：只有代码，模型自己选 |
+| `MoonVoice-1.2.7-moonvoice.6-update-from-5.zip` | 57 MB | **增量更新包**（给 1.2.7-moonvoice.5 的老用户：把里面的东西拖进旧包即可；满血/无模型通用） |
 | `MoonVoice-model-bf16.zip` | 5.42 GiB | bf16 模型（原版精度） |
 | `MoonVoice-model-q8_0.zip` | 4.05 GiB | q8_0 |
 | `MoonVoice-model-q6_k.zip` | 3.89 GiB | q6_k |
@@ -110,14 +111,15 @@ certutil -hashfile MoonVoice-1.2.7-moonvoice.6.zip SHA256
 **满血包**（`MoonVoice-1.2.7-moonvoice.6.zip`）的哈希是：
 
 ```
-569c9990ef9f4b988c516581b4dd468fe03fd384f38cf151223e090f8eb36eed  MoonVoice-1.2.7-moonvoice.6.zip
+d9d07dfc99d2840a75dfacba0f9d56a61723731716de47a069b694fb19d1837a  MoonVoice-1.2.7-moonvoice.6.zip
 ```
 
 <details>
-<summary>其余 6 个文件的 SHA256</summary>
+<summary>其余 7 个文件的 SHA256</summary>
 
 ```
 9a4b30f00319c6e691a01216e179cc4fcb589fcaa8c9d8407af2c569050f86da  MoonVoice-1.2.7-moonvoice.6-nomodel.zip
+81d3a3a89dadfb9e140611f1ffb2c9485315f0cfcaad82628778c51502307f99  MoonVoice-1.2.7-moonvoice.6-update-from-5.zip
 74a9a5abe3e22d5bd63073aef28f9f60cca610132d55bebb1c27aad1cd4bd1ed  MoonVoice-model-bf16.zip
 0d368a32ab16664f4b479528d91110cf25c543c6390c2f9532ab8a7b3a682b7a  MoonVoice-model-q8_0.zip
 ba92952f9b684a49fe80bdf996c8738e02263c8a035ec72620c3f9e53e7e0993  MoonVoice-model-q6_k.zip
