@@ -71,12 +71,13 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig,
         // 事件音（pjy/事件音效/ 与 pjy/事件音效01/ 下的文件）的音量。事件音不循环、
         // 不顶替循环轨，只是叠上去响一声，所以音量和环境音分开调。两个事件文件夹共用这一项。
         eventSoundVolume: 0.6,
-        // 隐藏聊天气泡里的场景标签（[角色|性别][情感][场景]）。由插件托管一条酒馆正则
+        // 隐藏聊天气泡里的方括号标签（[角色|性别][情感][场景]）。由插件托管一条酒馆正则
         // （markdownOnly = 仅格式显示），所以**聊天记录文件与发给模型的提示词都不变**，
         // GAL/RP 模式的配音也不受影响（它读的是底层 chat[i].mes）。
-        // 详见 chat-filter.js。
+        // **默认开启**：GAL 那串标签读起来很吵，多数人只想看台词；不喜欢的在
+        // 「💬 聊天显示」里关掉即可。详细说明见 README 与 chat-filter.js。
         chatTagHiding: {
-            enabled: false,
+            enabled: true,
             pattern: DEFAULT_PATTERN,
         },
         voiceMap: {},
@@ -3450,6 +3451,17 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig,
                             <div class="breezetts2-setting-row"><label>默认速度: <span id="breezetts2-speed-val">${settings.speed}</span></label><input type="range" id="breezetts2-speed" min="0.5" max="2" step="0.1" value="${settings.speed}"></div>
                             <div class="breezetts2-setting-row"><label>全局音量: <span id="breezetts2-volume-val">${volumeVal.toFixed(2)}</span></label><input type="range" id="breezetts2-volume" min="0" max="1" step="0.05" value="${volumeVal}"></div>
                         </div>
+                        <!-- 聊天显示：托管一条酒馆正则（仅格式显示），逻辑见 chat-filter.js。
+                             作用范围是**整个方括号标签格式**（角色/情感/场景），不只是场景那一段；
+                             面板上只留一句话，详细说明在 README。默认开启。 -->
+                        <div class="breezetts2-setting-module">
+                            <div class="breezetts2-module-header">💬 聊天显示</div>
+                            <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-hide-tags">隐藏聊天里的方括号标签</label><input type="checkbox" id="breezetts2-hide-tags" ${settings.chatTagHiding?.enabled ? 'checked' : ''}></div>
+                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">把 <code>[角色|性别][情感][场景]</code> 这串标签从气泡里藏掉，只留台词（只改显示，聊天记录与提示词不变）。</div>
+                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-row" style="${settings.chatTagHiding?.enabled ? '' : 'display: none;'}"><label style="flex: 0 0 auto; margin-right: 8px;">过滤正则</label><input type="text" id="breezetts2-hide-tags-pattern" class="text_pole" value="${settings.chatTagHiding?.pattern || ''}" placeholder="\\[[^\\]\\n]*\\]" style="flex: 1;"></div>
+                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-presets" style="font-size:0.85em; opacity:0.7; ${settings.chatTagHiding?.enabled ? '' : 'display: none;'}">现成的两个，直接抄进上面那栏：<br>${PATTERN_PRESETS.map(p => `　<code>${p.pattern}</code> —— ${p.label}（${p.note}）`).join('<br>')}</div>
+                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-status" style="font-size:0.85em;"></div>
+                        </div>
                         <!-- 模块3：缓存管理 -->
                         <div class="breezetts2-setting-module">
                             <div class="breezetts2-module-header">🎙️ 参考音频&缓存管理</div>
@@ -3466,18 +3478,6 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig,
                             <div class="breezetts2-setting-row"><label>淡入淡出</label><select id="breezetts2-ambient-fade" class="text_pole"><option value="0"${(settings.ambientFadeDuration ?? 0) == 0 ? ' selected' : ''}>关闭</option><option value="100"${(settings.ambientFadeDuration ?? 0) == 100 ? ' selected' : ''}>0.1 秒</option><option value="200"${(settings.ambientFadeDuration ?? 0) == 200 ? ' selected' : ''}>0.2 秒</option><option value="300"${(settings.ambientFadeDuration ?? 0) == 300 ? ' selected' : ''}>0.3 秒</option><option value="400"${(settings.ambientFadeDuration ?? 0) == 400 ? ' selected' : ''}>0.4 秒</option><option value="500"${(settings.ambientFadeDuration ?? 0) == 500 ? ' selected' : ''}>0.5 秒</option><option value="1000"${(settings.ambientFadeDuration ?? 0) == 1000 ? ' selected' : ''}>1 秒</option><option value="1500"${(settings.ambientFadeDuration ?? 0) == 1500 ? ' selected' : ''}>1.5 秒</option><option value="2000"${(settings.ambientFadeDuration ?? 0) == 2000 ? ' selected' : ''}>2 秒</option><option value="3000"${(settings.ambientFadeDuration ?? 0) == 3000 ? ' selected' : ''}>3 秒</option></select></div>
                             <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">音效文件命名需与场景名称一致，支持 .mp3 / .wav / .ogg / .m4a</div>
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-ambient-loop-scene">同场景下循环播放场景音</label><input type="checkbox" id="breezetts2-ambient-loop-scene" ${settings.ambientLoopByScene ? 'checked' : ''}></div>
-                        </div>
-                        <!-- 模块5：聊天显示 -->
-                        <div class="breezetts2-setting-module">
-                            <div class="breezetts2-module-header">💬 聊天显示</div>
-                            <!-- 隐藏方括号标签：托管一条酒馆正则（仅格式显示），逻辑见 chat-filter.js。
-                                 注意作用范围是**整个方括号标签格式**（角色/情感/场景），不只是场景那一段，
-                                 所以它属于"显示"，不属于"场景音效"。 -->
-                            <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-hide-tags">隐藏聊天里的方括号标签</label><input type="checkbox" id="breezetts2-hide-tags" ${settings.chatTagHiding?.enabled ? 'checked' : ''}></div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">把 <code>[角色|性别][情感][场景]</code> 这串标签从气泡显示里去掉，只留台词。做法是由插件托管一条酒馆正则（<b>仅格式显示</b>），在酒馆的「正则」扩展里能看到它。只改显示：<b>聊天记录文件与发给模型的提示词都不变</b>，GAL / RP 模式的配音不受影响；听书模式读的是渲染后的内容，会被一起过滤。</div>
-                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-row" style="${settings.chatTagHiding?.enabled ? '' : 'display: none;'}"><label style="flex: 0 0 auto; margin-right: 8px;">过滤正则</label><input type="text" id="breezetts2-hide-tags-pattern" class="text_pole" value="${settings.chatTagHiding?.pattern || ''}" placeholder="\\[[^\\]\\n]*\\]" style="flex: 1;"></div>
-                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-presets" style="font-size:0.85em; opacity:0.7; ${settings.chatTagHiding?.enabled ? '' : 'display: none;'}">现成的两个，直接抄进上面那栏：<br>${PATTERN_PRESETS.map(p => `　<code>${p.pattern}</code> —— ${p.label}（${p.note}）`).join('<br>')}</div>
-                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-status" style="font-size:0.85em;"></div>
                         </div>
                     </div>
                 </div>

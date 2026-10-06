@@ -258,8 +258,8 @@ Its scene list is **aligned one-to-one with the nine sounds shipped in the packa
 
 ### Don't want `[character][emotion][scene]` tags showing in chat?
 
-**Settings panel → 💬 Chat display → tick "隐藏聊天里的方括号标签" (hide scene tags in chat).** The
-extension manages a **SillyTavern regex** for you (using "Only Format Display"), which means:
+**Settings panel → 💬 Chat display → "隐藏聊天里的方括号标签" (hide bracket tags in chat) — on by default.**
+The extension manages a **SillyTavern regex** for you (using "Only Format Display"), which means:
 
 - only the **chat bubble rendering** changes — the **chat file and the prompt sent to the model are untouched**
 - **GAL / RP playback is unaffected** (the extension reads the raw `chat[i].mes`, not the display layer)

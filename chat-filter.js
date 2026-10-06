@@ -144,14 +144,17 @@ export function findScript(list) {
  *
  * 早期这个设置叫「隐藏场景标签」，键名是 sceneTagHiding —— 名字不准确（它删的是整个
  * 标签格式），所以改成 chatTagHiding。已经试过的用户不该因为改键名而丢设置。
+ *
+ * defaultEnabled 要与插件 defaultSettings 里的默认值一致（现在是**默认开启**：
+ * GAL 那串标签读起来很吵，多数人只想看台词）。只有键缺失或值不是布尔时才用这个默认值。
  * @returns {{enabled: boolean, pattern: string}}
  */
-export function pickTagHidingConfig(settings) {
+export function pickTagHidingConfig(settings, defaultEnabled = true) {
     const cur = settings && settings.chatTagHiding;
     const old = settings && settings.sceneTagHiding;
     const src = (cur && typeof cur === 'object') ? cur : ((old && typeof old === 'object') ? old : {});
     return {
-        enabled: src.enabled === true,
+        enabled: typeof src.enabled === 'boolean' ? src.enabled : defaultEnabled,
         pattern: typeof src.pattern === 'string' && src.pattern ? src.pattern : DEFAULT_PATTERN,
     };
 }
