@@ -5,8 +5,12 @@
 //  聊天气泡的显示过滤：由插件托管一条「仅格式显示」的酒馆正则
 // ============================================================================
 //
-// 目标：让 GAL 模式那种 [角色|性别][情感][场景]“台词” 在聊天里只看到台词，
+// 目标：让 GAL 格式那串 [角色|性别][情感描述][场景] 在聊天里只看到台词，
 // 而**聊天记录文件本身不变**（插件的 GAL/RP 解析读的是底层 chat[i].mes，所以配音不受影响）。
+//
+// 注意作用范围：默认正则删的是**方括号标签整体**（角色/情感/场景三段都算），
+// 不只是场景那一段 —— 所以设置项叫「隐藏方括号标签」，放在「聊天显示」模块里，
+// 而不是塞进「场景音效」。想只删场景那一段，用 PATTERN_PRESETS 里的第二个模式。
 //
 // 为什么托管一条酒馆正则，而不是自己改 DOM：
 //   酒馆的正则扩展本来就是这个用途，它有一条已经测好的显示管线（markdownOnly 只作用于
@@ -25,10 +29,16 @@
 // 本文件是纯逻辑（不碰 DOM / ctx），所以能在 Node 里单测。
 
 /** 托管脚本的固定 id：增删改都只认它，绝不碰用户自己的正则。 */
-export const SCENE_TAG_HIDE_ID = 'moonvoice-hide-scene-tags';
-export const SCENE_TAG_HIDE_NAME = '月声 · 隐藏场景标签';
+export const BRACKET_TAG_HIDE_ID = 'moonvoice-hide-bracket-tags';
+export const BRACKET_TAG_HIDE_NAME = '月声 · 隐藏方括号标签';
 
-/** 默认把方括号标签整段删掉（[角色|性别][情感][场景] 三个都删）。 */
+/**
+ * 早期版本的 id（那时这个设置叫「隐藏场景标签」）。留着是为了**清理**：
+ * 启用或关闭时顺手把旧 id 那条也带走，免得用户的正则列表里留下一条没人管的规则。
+ */
+export const LEGACY_SCRIPT_IDS = ['moonvoice-hide-scene-tags'];
+
+/** 默认把方括号标签整段删掉（[角色|性别][情感][场景] 三段都删）。 */
 export const DEFAULT_PATTERN = '\\[[^\\]\\n]*\\]';
 export const DEFAULT_FLAGS = 'g';
 
@@ -88,8 +98,8 @@ export function buildSceneHideScript(config = {}) {
         config.pattern === undefined ? DEFAULT_PATTERN : config.pattern, DEFAULT_FLAGS);
     if (validatePattern(pattern, flags)) return null;
     return {
-        id: SCENE_TAG_HIDE_ID,
-        scriptName: SCENE_TAG_HIDE_NAME,
+        id: BRACKET_TAG_HIDE_ID,
+        scriptName: BRACKET_TAG_HIDE_NAME,
         disabled: config.enabled === false,
         // 编辑消息时**不**过滤：让人看到、也能改到原始的 [标签] 文本。
         // （酒馆正则编辑器的 "Run on Edit" 默认也是不勾。）
@@ -106,32 +116,50 @@ export function buildSceneHideScript(config = {}) {
     };
 }
 
-/** 用托管脚本替换列表里同 id 的那条（原地替换，保持位置）；没有就追加。返回新数组。 */
+/** 用托管脚本替换列表里同 id 的那条（原地替换，保持位置）；没有就追加。
+ *  顺手丢掉旧 id 的历史条目，避免正则列表里留下没人管的规则。返回新数组。 */
 export function upsertScript(list, script) {
-    const out = Array.isArray(list) ? list.slice() : [];
-    const idx = out.findIndex(s => s && s.id === SCENE_TAG_HIDE_ID);
+    const out = (Array.isArray(list) ? list : [])
+        .filter(s => !(s && LEGACY_SCRIPT_IDS.includes(s.id)));
+    const idx = out.findIndex(s => s && s.id === BRACKET_TAG_HIDE_ID);
     if (idx >= 0) out[idx] = script;
     else out.push(script);
     return out;
 }
 
-/** 删掉托管脚本；**其它条目原样保留**。返回新数组。 */
+/** 删掉托管脚本（含旧 id 的历史条目）；**其它条目原样保留**。返回新数组。 */
 export function removeScript(list) {
     const out = Array.isArray(list) ? list.slice() : [];
-    const idx = out.findIndex(s => s && s.id === SCENE_TAG_HIDE_ID);
-    if (idx >= 0) out.splice(idx, 1);
-    return out;
+    const kill = [BRACKET_TAG_HIDE_ID, ...LEGACY_SCRIPT_IDS];
+    return out.filter(s => !(s && kill.includes(s.id)));
 }
 
-/** 列表里有没有托管脚本（供面板显示状态）。 */
+/** 列表里有没有托管脚本（只看当前 id；供面板显示状态）。 */
 export function findScript(list) {
-    return (Array.isArray(list) ? list : []).find(s => s && s.id === SCENE_TAG_HIDE_ID) || null;
+    return (Array.isArray(list) ? list : []).find(s => s && s.id === BRACKET_TAG_HIDE_ID) || null;
+}
+
+/**
+ * 取「隐藏方括号标签」的配置，兼容早期键名 sceneTagHiding。
+ *
+ * 早期这个设置叫「隐藏场景标签」，键名是 sceneTagHiding —— 名字不准确（它删的是整个
+ * 标签格式），所以改成 chatTagHiding。已经试过的用户不该因为改键名而丢设置。
+ * @returns {{enabled: boolean, pattern: string}}
+ */
+export function pickTagHidingConfig(settings) {
+    const cur = settings && settings.chatTagHiding;
+    const old = settings && settings.sceneTagHiding;
+    const src = (cur && typeof cur === 'object') ? cur : ((old && typeof old === 'object') ? old : {});
+    return {
+        enabled: src.enabled === true,
+        pattern: typeof src.pattern === 'string' && src.pattern ? src.pattern : DEFAULT_PATTERN,
+    };
 }
 
 /** 面板上给用户抄的两个现成模式。 */
 export const PATTERN_PRESETS = [
     { label: '隐藏全部方括号标签', pattern: DEFAULT_PATTERN,
-      note: '[角色|性别][情感][场景] 三段都藏掉，只留台词' },
+      note: '默认；[角色|性别][情感][场景] 三段都藏掉，只留台词' },
     { label: '只隐藏场景标签', pattern: '\\[[^\\]\\n]*\\](?=\\s*[「"“『])',
-      note: '只藏引号前那一段（即 [场景]），角色与情感标签保留' },
+      note: '只藏引号前那一段，角色与情感标签保留' },
 ];

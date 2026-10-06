@@ -258,12 +258,12 @@ Its scene list is **aligned one-to-one with the nine sounds shipped in the packa
 
 ### Don't want `[character][emotion][scene]` tags showing in chat?
 
-**Settings panel → 🎵 Scene audio → tick "隐藏聊天里的场景标签" (hide scene tags in chat).** The
+**Settings panel → 💬 Chat display → tick "隐藏聊天里的方括号标签" (hide scene tags in chat).** The
 extension manages a **SillyTavern regex** for you (using "Only Format Display"), which means:
 
 - only the **chat bubble rendering** changes — the **chat file and the prompt sent to the model are untouched**
 - **GAL / RP playback is unaffected** (the extension reads the raw `chat[i].mes`, not the display layer)
-- the rule is visible in SillyTavern's Regex extension (named 「月声 · 隐藏场景标签」), so you can edit it yourself
+- the rule is visible in SillyTavern's Regex extension (named 「月声 · 隐藏方括号标签」), so you can edit it yourself
 - **audiobook mode is the exception**: it reads the rendered content, so the tags are filtered there too
 
 The "filter regex" field accepts two useful patterns out of the box:
