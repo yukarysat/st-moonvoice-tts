@@ -81,8 +81,8 @@ Packaged separately; grab what you need:
 
 | File | Size | What it is |
 | --- | ---: | --- |
-| `MoonVoice-1.2.7-moonvoice.5.zip` | 6.28 GiB | **Full package**: code + bf16 model, ready to run |
-| `MoonVoice-1.2.7-moonvoice.5-nomodel.zip` | 0.85 GiB | **No-model package**: code only, bring your own model |
+| `MoonVoice-1.2.7-moonvoice.6.zip` | 6.28 GiB | **Full package**: code + bf16 model, ready to run |
+| `MoonVoice-1.2.7-moonvoice.6-nomodel.zip` | 0.85 GiB | **No-model package**: code only, bring your own model |
 | `MoonVoice-model-bf16.zip` | 5.42 GiB | bf16 model (original precision) |
 | `MoonVoice-model-q8_0.zip` | 4.05 GiB | q8_0 |
 | `MoonVoice-model-q6_k.zip` | 3.89 GiB | q6_k |
@@ -112,20 +112,20 @@ only use CPU mode.
 Verify after downloading — `certutil` ships with Windows, nothing to install:
 
 ```
-certutil -hashfile MoonVoice-1.2.7-moonvoice.5.zip SHA256
+certutil -hashfile MoonVoice-1.2.7-moonvoice.6.zip SHA256
 ```
 
-Full package (`MoonVoice-1.2.7-moonvoice.5.zip`):
+Full package (`MoonVoice-1.2.7-moonvoice.6.zip`):
 
 ```
-e8ca0c8bffa305fa0c015f50a47cbf52ab5543377a2fda78b80b077949919dae  MoonVoice-1.2.7-moonvoice.5.zip
+569c9990ef9f4b988c516581b4dd468fe03fd384f38cf151223e090f8eb36eed  MoonVoice-1.2.7-moonvoice.6.zip
 ```
 
 <details>
 <summary>SHA256 of the other 6 files</summary>
 
 ```
-d9e81a5297a2d6a421ef6959f550050886ec93743554b06ac9c8e0e19d93551c  MoonVoice-1.2.7-moonvoice.5-nomodel.zip
+9a4b30f00319c6e691a01216e179cc4fcb589fcaa8c9d8407af2c569050f86da  MoonVoice-1.2.7-moonvoice.6-nomodel.zip
 74a9a5abe3e22d5bd63073aef28f9f60cca610132d55bebb1c27aad1cd4bd1ed  MoonVoice-model-bf16.zip
 0d368a32ab16664f4b479528d91110cf25c543c6390c2f9532ab8a7b3a682b7a  MoonVoice-model-q8_0.zip
 ba92952f9b684a49fe80bdf996c8738e02263c8a035ec72620c3f9e53e7e0993  MoonVoice-model-q6_k.zip

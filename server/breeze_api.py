@@ -135,7 +135,7 @@ DEFAULT_MODEL = "breeze-tts-2"
 #
 # 版本号与仓库根目录 manifest.json 保持一致，改版本时两处一起改。
 SOFTWARE_NAME = "月声 MoonVoice"
-SOFTWARE_VERSION = "1.2.7-moonvoice.5"
+SOFTWARE_VERSION = "1.2.7-moonvoice.6"
 SOFTWARE_AUTHOR = "古木兆月"
 SOFTWARE_REPO = "https://github.com/yukarysat/st-moonvoice-tts"
 SOFTWARE_UPSTREAM = "Breeze TTS 2（breezeblue-ai/breeze-tts）· audio.cpp 运行时"
