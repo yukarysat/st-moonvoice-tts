@@ -4049,6 +4049,11 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
                         // 于是新对话里模型干脆不写标签（历史里没有实例可模仿时尤其明显）。
                         const index = planSpecInsertIndex(eventData.chat.length, depth);
                         eventData.chat.splice(index, 0, injection);
+                        // 临时诊断：这一行说明钩子确实跑到了，并给出注入后的实际情况
+                        console.info('[MoonVoice] 注入检查: 请求', eventData.chat.length, '条 / 规范',
+                            content.length, '字 / index', index, '/ 首条',
+                            eventData.chat[0] && eventData.chat[0].role, '/ 末条',
+                            eventData.chat[eventData.chat.length - 1] && eventData.chat[eventData.chat.length - 1].role);
                     }
                 });
             }
@@ -4132,6 +4137,8 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
         AmbientPlayer.init();
         migrateTagHidingKey();  // 旧键 sceneTagHiding -> chatTagHiding（一次性）
         syncChatTagHiding();   // 把「隐藏方括号标签」对齐成酒馆正则（用户可能在别处删过它）
+        // 临时诊断：看到这一行说明浏览器加载的是带「规范位置夹取」的新代码（排查缓存问题用）
+        console.log('[MoonVoice] 已初始化（构建标记 inject-index-fix-2）');
         setupEventListeners();
         setInterval(polling, 15000); // 低频兜底：覆盖观察器盲区
         setupMutationObserver();
