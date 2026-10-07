@@ -8,7 +8,7 @@
 // 本文件由酒馆以 type="module" 加载，所以可以直接 import。
 import { TRACK_RULES, createMixState, planScene, isEventName,
          catalogFromTracks, catalogFromLegacy, emptyCatalog } from './scene-mixer.js';
-import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStrip, planSpecInsertIndex,
+import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStrip, applyPromptTagStripInPlace, planSpecInsertIndex,
          buildSceneHideScript, upsertScript, removeScript, findScript } from './chat-filter.js';
 (function () {
     // 设置存储键：写进 SillyTavern 的 extension_settings，一旦改动用户配置就会丢，绝不可改
@@ -3426,7 +3426,7 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
                             <!-- 喂给模型的历史里去掉标签：逻辑在 chat-filter.js 的 planPromptTagStrip -->
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-strip-history-tags">注入时去掉历史里的标签</label><input type="checkbox" id="breezetts2-strip-history-tags" ${settings.stripHistoryTags?.enabled !== false ? 'checked' : ''}></div>
                             <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">发给模型的历史里，把行首的 <code>[角色|性别][情感][场景]</code> 去掉（<b>聊天记录与显示都不变</b>），免得情感描述照着上一轮抄、越写越固定。格式由提示词约束。</div>
-                            <div class="breezetts2-setting-row" id="breezetts2-strip-keep-row" style="${settings.stripHistoryTags?.enabled !== false ? '' : 'display: none;'}"><label>保留示范条数</label><input type="number" id="breezetts2-strip-keep" class="text_pole" min="0" max="5" value="${settings.stripHistoryTags?.keep ?? 1}" style="width: 80px;"><span style="font-size:0.85em; opacity:0.7;">条（留最近几条做格式示范）<b>0 不推荐</b>：历史里一条标签实例都不剩时，模型可能干脆不写标签 —— GAL 模式就没台词可读了</span></div>
+                            <div class="breezetts2-setting-row" id="breezetts2-strip-keep-row" style="${settings.stripHistoryTags?.enabled !== false ? '' : 'display: none;'}"><label>保留示范条数</label><input type="number" id="breezetts2-strip-keep" class="text_pole" min="0" max="5" value="${settings.stripHistoryTags?.keep ?? 1}" style="width: 80px;"><span style="font-size:0.85em; opacity:0.7;">条（留最近几条做格式示范）。填 <b>0</b> 时历史里没有任何格式实例，若你的模型依赖上下文里的实例，可能会不写标签 —— 建议至少留 1</span></div>
                             <div class="breezetts2-setting-row" style="flex-direction:column; align-items:flex-start;"><label style="margin-bottom:5px;">提示词正文<span id="breezetts2-prompt-body-note" style="font-weight:normal; opacity:0.7;"></span></label><textarea id="breezetts2-prompt-body" class="text_pole" rows="6" placeholder="提示词正文...">${settings.promptInjection?.body || ''}</textarea></div>
                             <div class="breezetts2-setting-row" style="flex-direction:column; align-items:flex-start;"><label style="margin-bottom:5px;">可用音效清单（你的，插件不会改它）</label><textarea id="breezetts2-prompt-scenelist" class="text_pole" rows="5" placeholder="#### 正常场景列表：&#10;雨声、森林&#10;#### NSFW场景列表：">${settings.promptInjection?.sceneList || ''}</textarea></div>
                             <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;" id="breezetts2-prompt-names-hint"></div>
@@ -4029,7 +4029,8 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
                     // 只改这份请求用的副本：聊天记录、显示、以及插件自己读场景名做音效都不受影响。
                     try {
                         const stripCfg = settings.stripHistoryTags || {};
-                        eventData.chat = planPromptTagStrip(eventData.chat, stripCfg);
+                        // 必须原地改：openai.js 那条路径不会读回 eventData.chat（详见 chat-filter.js 注释）
+                        applyPromptTagStripInPlace(eventData.chat, stripCfg);
                     } catch (e) {
                         console.warn('[MoonVoice] 处理历史标签时出错（本次不处理）:', e);
                     }
@@ -4044,9 +4045,8 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
                         if (!content) return;
                         const depth = parseInt(config.depth) || 0;
                         const injection = { role: config.role || 'system', content };
-                        // 插入位置交给 planSpecInsertIndex：它处理了短对话（新开的对话）这个坑
-                        // —— 早期实现会把 index 夹成 0，等于把规范丢到角色卡之前、离生成点最远，
-                        // 于是新对话里模型干脆不写标签（历史里没有实例可模仿时尤其明显）。
+                        // 插入位置交给 planSpecInsertIndex：顺带修掉"短对话时被夹到 0"——
+                        // 那会把规范丢到角色卡之前、离生成点最远（健壮性改进，不是某个已发生故障的原因）。
                         const index = planSpecInsertIndex(eventData.chat.length, depth);
                         eventData.chat.splice(index, 0, injection);
                         // 临时诊断：这一行说明钩子确实跑到了，并给出注入后的实际情况

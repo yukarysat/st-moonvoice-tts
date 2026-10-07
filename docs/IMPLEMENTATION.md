@@ -425,15 +425,30 @@ python E:\deepseekHarness\BreezeTTS2\setup\222-check-test-env.py
 
 单测脚本（工作区 `setup/228`、`setup/229`）会核对规则表本身与侧车返回的结构。
 
+## 注入必须原地修改请求数组（两条路径行为不同）
+
+`CHAT_COMPLETION_PROMPT_READY` 这一处钩子，酒馆有两条构建路径：
+
+| 文件 | 事件之后 |
+| --- | --- |
+| `script.js` | `prompt = eventData.chat;` —— **会**读回我们替换的数组 |
+| `openai.js` | `const chat = ...; const eventData = { chat }; emit(...); return [chat, ...]` —— **从不**读回 |
+
+所以插件**绝不能**写 `eventData.chat = 新数组`：在 openai 路径上那个新数组会被丢弃，之后往
+`eventData.chat` 里 splice 的内容（格式规范注入）就落在被丢弃的数组上 —— 规范静默丢失，表现为
+"新对话里模型不写标签、GAL 没台词、没语音"（老对话靠历史实例撑着，看不出来）。
+
+规矩：**只做原地修改**（`splice` / 逐项写回）。去标签用 `applyPromptTagStripInPlace()`，
+它在内部把新结果写回原数组并返回改动条数。测试见 `setup/253` 的 E 组（含旧写法的反面复现）。
+
 ## 注入位置：短上下文必须夹到"紧贴末尾"
 
 `planSpecInsertIndex(length, depth)`（`chat-filter.js`，纯函数）决定格式规范插在请求的第几条。
 
 `depth` 的语义与酒馆的扩展提示词一致：从末尾往前数（4 = 倒数第 4 条之前）。坑在短对话上 ——
 早期实现 `index = length - depth; if (index < 0) index = 0;`，当对话比 depth 还短时会把规范丢到
-**index 0**，也就是排在角色卡之前、离生成点最远。老对话看不出来（历史里全是带标签的例子，模型
-照抄即可），**新开的对话**里模型没有任何实例可模仿、规范又离得最远，于是干脆不写标签：GAL 模式
-解析不到台词、没有语音（实测：2026-10-07，同角色同卡，老对话 17/18 条带标签，新对话 0/2）。
+**index 0**，也就是排在角色卡之前、离生成点最远。（当时我们曾据此以为它就是
+新对话不写标签的原因，后来查明真正的原因是注入被丢掉 —— 见上一节 —— 所以这里只当健壮性改进。）
 
 现在的规则：不越过第 1 条（最多夹到 index 1）；短上下文紧贴末尾（等价 depth=1，最后一条仍是
 用户消息）；depth=0 仍按用户意愿插到最末尾。长对话（length > depth）完全不变。

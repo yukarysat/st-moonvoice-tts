@@ -212,11 +212,10 @@ export function planSpecInsertIndex(length, depth) {
 //   1) **只动请求用的那一份**。插件在 CHAT_COMPLETION_PROMPT_READY 里拿到的 chat 是给这次
 //      请求用的数组（现有的规范注入也在这个钩子里往它里面插消息）。聊天记录文件、显示、
 //      以及插件自己读场景名做音效，读的都是底层原文，都不受影响。
-//   0) **keep 至少留 1**。实测（2026-10，作者的模型）：keep=0 时历史里一条标签实例都不剩，
-//      模型会干脆不写标签 —— 尽管注入的规范正文里有 5 行带标签的示例。GAL 模式于是解析不到
-//      台词、没有语音。也就是说"只靠提示词约束格式"在上下文里没有实例时并不成立。
-//      而且一旦这种状态出现，chat 里就没有带标签的助手消息可供示范了，**不会自己恢复** ——
-//      要么把 keep 调回 1 并手动给一条消息补上标签，要么换新对话。
+//   0) **keep 建议至少留 1**。填 0 时历史里没有任何格式实例；如果模型依赖上下文里的实例
+//      （很常见），就可能干脆不写标签，GAL 模式于是没台词可读。这条只是谨慎建议 —— 早先我们
+//      曾把一次"新对话不写标签"归因于 keep=0，后来查明那次是注入失效导致的，所以这里不做
+//      "实测结论"的断言。
 //   2) **保留的那条不只是格式样板，它还带着"当前场景"**。全抹掉的话模型可能每句微调场景名
 //      （雨声 / 雨声_室内 之间来回），那会让环境音反复重启、事件轨反复触发。留最近一条正好
 //      把这个信息也留下了。
@@ -248,6 +247,35 @@ export function stripFormatTags(text) {
  *        enabled=false 时原样返回；keep = 保留最近几条**带标签的助手消息**当示范（0 = 全去）
  * @returns {Array} 新数组（不改原数组；没变化的元素按原引用返回）
  */
+/**
+ * 原地版：把 planPromptTagStrip 的结果**逐个写回原数组**，保持数组对象不变。
+ *
+ * 为什么必须原地改（血泪教训）：酒馆有两条构建提示词的路径，行为不同 ——
+ *   · script.js：emit 之后 `prompt = eventData.chat`，**会**读回我们赋的新数组；
+ *   · openai.js：`const chat = chatCompletion.getChat(); const eventData = { chat }; emit(...);
+ *     return [chat, ...]` —— **从不**读回，用的始终是最初那个数组对象。
+ * 所以只要写成 `eventData.chat = planPromptTagStrip(...)`，在 openai 这条路径（绝大多数
+ * 聊天补全用户）上，后续往 eventData.chat 里 splice 的"规范注入"就落在了被丢弃的数组上 ——
+ * 规范根本没进请求，表现是"新对话里模型不写标签、GAL 模式没台词、没有语音"。
+ *
+ * @param {Array} messages 酒馆给的请求数组（会被就地修改）
+ * @param {{enabled?: boolean, keep?: number}} config
+ * @returns {number} 有多少条消息的标签被去掉
+ */
+export function applyPromptTagStripInPlace(messages, config = {}) {
+    if (!Array.isArray(messages)) return 0;
+    const planned = planPromptTagStrip(messages, config);
+    if (planned.length !== messages.length) return 0;   // 长度异常时宁可不改
+    let changed = 0;
+    for (let i = 0; i < planned.length; i++) {
+        if (planned[i] !== messages[i]) {
+            messages[i] = planned[i];
+            changed++;
+        }
+    }
+    return changed;
+}
+
 export function planPromptTagStrip(messages, config = {}) {
     const out = Array.isArray(messages) ? messages.slice() : [];
     if (config.enabled === false) return out;
