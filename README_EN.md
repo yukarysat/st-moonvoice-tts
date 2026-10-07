@@ -297,7 +297,12 @@ format ever drifts, that line pulls it back. It also carries the *current scene*
 model from renaming the scene every line (that would restart ambience and re-fire `事件音效01`).
 
 Where: **📝 Prompt management → "注入时去掉历史里的标签"** (on by default); "保留示范条数" below it
-controls how many tagged messages stay (default 1, 0 strips them all).
+controls how many tagged messages stay (default 1).
+
+> ⚠️ **Do not set it to 0.** Measured: with no tagged example left in context the model simply stops
+> writing tags (even though the injected spec contains examples), so GAL mode finds no dialogue and
+> nothing is spoken. That state does not recover by itself — set the count back to 1 and add tags to
+> the most recent reply by hand to pull the format back.
 
 ## Main features
 
@@ -399,7 +404,7 @@ A playback bar independent of the chat log, with separate volume for voice and a
 | Loop scene audio within a scene | off | Off = loop tracks restart every line (legacy behaviour) |
 | Hide bracket tags | on | Manages a SillyTavern regex (**display only**) that hides `[character][emotion][scene]` from chat bubbles; chats and prompt unchanged |
 | Strip tags from history | on | Leading tags are removed from what is sent to the model (chat file and display unchanged) so emotion descriptions don't self-anchor; the most recent tagged message is kept as a live example |
-| Example messages kept | 1 | How many tagged messages stay as a format example (0 = strip them all) |
+| Example messages kept | 1 | How many tagged messages stay as a format example. **Avoid 0**: with no example the model may stop writing tags altogether |
 | Floating player | on | |
 | Prompt injection | on | Injects the format spec at the configured depth. Stored as two pieces: the **body** follows plugin updates, the **available-sound list** is always yours |
 | Follow prompt updates | on | Turn it off and the body is yours too (the panel says whether the body is read-only or editable) |
