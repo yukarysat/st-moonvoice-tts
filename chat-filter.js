@@ -167,6 +167,37 @@ export const PATTERN_PRESETS = [
       note: '只藏引号前那一段，角色与情感标签保留' },
 ];
 
+/**
+ * 算出「格式规范」应该插在请求里的哪个位置。
+ *
+ * depth 的语义是"从末尾往前数第几条"（depth=4 = 插在倒数第 4 条之前），与酒馆自己的扩展
+ * 提示词一致。
+ *
+ * 短对话有个坑（实测踩到）：对话比 depth 还短时，早期实现把 index 夹成 0 —— 那等于把规范丢到
+ * **角色卡之前**、离生成点最远。后果：新开的对话里既没有历史中的格式实例可模仿、规范又排在最
+ * 前面，模型就干脆不写标签了（GAL 模式于是没台词可读、没有语音）。老对话看不出问题，是因为
+ * 历史里的标签实例把格式撑住了。
+ *
+ * 现在的夹取规则：
+ *   · 不越过第 1 条（角色卡等），最多夹到 index 1；
+ *   · 短对话时紧贴末尾 —— 等价于 depth=1（插在最后一条之前，最后一条仍是用户消息，兼容那些
+ *     要求"最后一条必须是 user"的后端）；
+ *   · depth=0 仍按用户意愿插到最末尾。
+ *
+ * @param {number} length 请求里的消息条数（插入之前）
+ * @param {number} depth  用户设置的注入深度
+ * @returns {number} 插入位置
+ */
+export function planSpecInsertIndex(length, depth) {
+    const len = Number.isFinite(length) ? Math.max(0, Math.trunc(length)) : 0;
+    const d = Number.isFinite(Number(depth)) ? Math.max(0, Math.trunc(Number(depth))) : 0;
+    const minIndex = len > 1 ? 1 : 0;
+    let index = len - d;
+    if (index < minIndex) index = Math.max(minIndex, len - 1);
+    if (index > len) index = len;
+    return index;
+}
+
 // ============================================================================
 //  喂给模型的那一份：把历史里的标签去掉（只留最近几条当示范）
 // ============================================================================

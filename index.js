@@ -8,7 +8,7 @@
 // 本文件由酒馆以 type="module" 加载，所以可以直接 import。
 import { TRACK_RULES, createMixState, planScene, isEventName,
          catalogFromTracks, catalogFromLegacy, emptyCatalog } from './scene-mixer.js';
-import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStrip,
+import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStrip, planSpecInsertIndex,
          buildSceneHideScript, upsertScript, removeScript, findScript } from './chat-filter.js';
 (function () {
     // 设置存储键：写进 SillyTavern 的 extension_settings，一旦改动用户配置就会丢，绝不可改
@@ -3421,6 +3421,7 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-prompt-follow">正文跟随插件更新</label><input type="checkbox" id="breezetts2-prompt-follow"${settings.promptInjection?.followUpdates !== false ? ' checked' : ''}></div>
                             <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">提示词分两块：<strong>正文</strong>（格式规范、情感描述要求、示例）跟随插件更新，每次加载都刷成最新版；<strong>可用音效清单</strong>永远归你，插件不会动它。想在正文里写自己的东西，就把上面这个开关关掉。</div>
                             <div class="breezetts2-setting-row"><label>注入深度</label><input type="number" id="breezetts2-prompt-depth" class="text_pole" value="${settings.promptInjection?.depth ?? 4}" min="0"></div>
+                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">数字是"从末尾往前数第几条"：4 = 插在倒数第 4 条之前。<b>对话很短（比如刚开的新对话）时不会再被挤到最前面</b>，会紧贴末尾；想让它始终贴着生成点就填 1（0 = 插到最后）。</div>
                             <div class="breezetts2-setting-row"><label>角色</label><select id="breezetts2-prompt-role" class="text_pole"><option value="system"${settings.promptInjection?.role === 'system' ? ' selected' : ''}>System</option><option value="user"${settings.promptInjection?.role === 'user' ? ' selected' : ''}>User</option><option value="assistant"${settings.promptInjection?.role === 'assistant' ? ' selected' : ''}>Assistant</option></select></div>
                             <!-- 喂给模型的历史里去掉标签：逻辑在 chat-filter.js 的 planPromptTagStrip -->
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-strip-history-tags">注入时去掉历史里的标签</label><input type="checkbox" id="breezetts2-strip-history-tags" ${settings.stripHistoryTags?.enabled !== false ? 'checked' : ''}></div>
@@ -4043,9 +4044,10 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
                         if (!content) return;
                         const depth = parseInt(config.depth) || 0;
                         const injection = { role: config.role || 'system', content };
-                        let index = eventData.chat.length - depth;
-                        if (index < 0) index = 0;
-                        if (index > eventData.chat.length) index = eventData.chat.length;
+                        // 插入位置交给 planSpecInsertIndex：它处理了短对话（新开的对话）这个坑
+                        // —— 早期实现会把 index 夹成 0，等于把规范丢到角色卡之前、离生成点最远，
+                        // 于是新对话里模型干脆不写标签（历史里没有实例可模仿时尤其明显）。
+                        const index = planSpecInsertIndex(eventData.chat.length, depth);
                         eventData.chat.splice(index, 0, injection);
                     }
                 });

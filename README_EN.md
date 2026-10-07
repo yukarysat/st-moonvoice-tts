@@ -406,7 +406,7 @@ A playback bar independent of the chat log, with separate volume for voice and a
 | Strip tags from history | on | Leading tags are removed from what is sent to the model (chat file and display unchanged) so emotion descriptions don't self-anchor; the most recent tagged message is kept as a live example |
 | Example messages kept | 1 | How many tagged messages stay as a format example. **Avoid 0**: with no example the model may stop writing tags altogether |
 | Floating player | on | |
-| Prompt injection | on | Injects the format spec at the configured depth. Stored as two pieces: the **body** follows plugin updates, the **available-sound list** is always yours |
+| Prompt injection | on | Injects the format spec at the configured depth (4 = before the 4th message from the end; **in short contexts such as a brand-new chat it hugs the end** instead of landing before the character card). Stored as two pieces: the **body** follows plugin updates, the **available-sound list** is always yours |
 | Follow prompt updates | on | Turn it off and the body is yours too (the panel says whether the body is read-only or editable) |
 | Regex filter | off | Turning it on **replaces the built-in filtering** (audiobook mode hard-filters markdown and similar decoration) with your own regex |
 
