@@ -8,7 +8,7 @@
 // 本文件由酒馆以 type="module" 加载，所以可以直接 import。
 import { TRACK_RULES, createMixState, planScene, isEventName,
          catalogFromTracks, catalogFromLegacy, emptyCatalog } from './scene-mixer.js';
-import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig,
+import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStrip,
          buildSceneHideScript, upsertScript, removeScript, findScript } from './chat-filter.js';
 (function () {
     // 设置存储键：写进 SillyTavern 的 extension_settings，一旦改动用户配置就会丢，绝不可改
@@ -94,6 +94,16 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig,
             followUpdates: true,
             depth: 4,
             role: "system"
+        },
+        // 喂给模型的那一份里，把历史消息上行首的 [角色|性别][情感][场景] 去掉，
+        // 只留最近 keep 条当示范（见 chat-filter.js 的 planPromptTagStrip）。
+        // 起因：模型每轮都能看到自己上一轮的标签，会照着上一轮的措辞写情感描述，
+        // 越写越固定。去掉历史里的例子、把格式交给提示词约束；留最近一条既是格式样板，
+        // 也顺带保住了"当前场景"（否则模型可能每句微调场景名 → 环境音反复重启）。
+        // 只影响这次请求，聊天记录与显示都不变。
+        stripHistoryTags: {
+            enabled: true,
+            keep: 1,
         },
         regexFilter: {
             enabled: false,
@@ -3412,6 +3422,10 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig,
                             <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">提示词分两块：<strong>正文</strong>（格式规范、情感描述要求、示例）跟随插件更新，每次加载都刷成最新版；<strong>可用音效清单</strong>永远归你，插件不会动它。想在正文里写自己的东西，就把上面这个开关关掉。</div>
                             <div class="breezetts2-setting-row"><label>注入深度</label><input type="number" id="breezetts2-prompt-depth" class="text_pole" value="${settings.promptInjection?.depth ?? 4}" min="0"></div>
                             <div class="breezetts2-setting-row"><label>角色</label><select id="breezetts2-prompt-role" class="text_pole"><option value="system"${settings.promptInjection?.role === 'system' ? ' selected' : ''}>System</option><option value="user"${settings.promptInjection?.role === 'user' ? ' selected' : ''}>User</option><option value="assistant"${settings.promptInjection?.role === 'assistant' ? ' selected' : ''}>Assistant</option></select></div>
+                            <!-- 喂给模型的历史里去掉标签：逻辑在 chat-filter.js 的 planPromptTagStrip -->
+                            <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-strip-history-tags">注入时去掉历史里的标签</label><input type="checkbox" id="breezetts2-strip-history-tags" ${settings.stripHistoryTags?.enabled !== false ? 'checked' : ''}></div>
+                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">发给模型的历史里，把行首的 <code>[角色|性别][情感][场景]</code> 去掉（<b>聊天记录与显示都不变</b>），免得情感描述照着上一轮抄、越写越固定。格式由提示词约束。</div>
+                            <div class="breezetts2-setting-row" id="breezetts2-strip-keep-row" style="${settings.stripHistoryTags?.enabled !== false ? '' : 'display: none;'}"><label>保留示范条数</label><input type="number" id="breezetts2-strip-keep" class="text_pole" min="0" max="5" value="${settings.stripHistoryTags?.keep ?? 1}" style="width: 80px;"><span style="font-size:0.85em; opacity:0.7;">条（留最近几条做格式示范，0 = 全部去掉）</span></div>
                             <div class="breezetts2-setting-row" style="flex-direction:column; align-items:flex-start;"><label style="margin-bottom:5px;">提示词正文<span id="breezetts2-prompt-body-note" style="font-weight:normal; opacity:0.7;"></span></label><textarea id="breezetts2-prompt-body" class="text_pole" rows="6" placeholder="提示词正文...">${settings.promptInjection?.body || ''}</textarea></div>
                             <div class="breezetts2-setting-row" style="flex-direction:column; align-items:flex-start;"><label style="margin-bottom:5px;">可用音效清单（你的，插件不会改它）</label><textarea id="breezetts2-prompt-scenelist" class="text_pole" rows="5" placeholder="#### 正常场景列表：&#10;雨声、森林&#10;#### NSFW场景列表：">${settings.promptInjection?.sceneList || ''}</textarea></div>
                             <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;" id="breezetts2-prompt-names-hint"></div>
@@ -3615,6 +3629,34 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig,
         bindPrompt('#breezetts2-prompt-enable', 'enabled'); bindPrompt('#breezetts2-prompt-depth', 'depth'); bindPrompt('#breezetts2-prompt-role', 'role');
         bindPrompt('#breezetts2-prompt-body', 'body'); bindPrompt('#breezetts2-prompt-scenelist', 'sceneList');
         bindPrompt('#breezetts2-prompt-follow', 'followUpdates');
+
+        // ---- 注入时去掉历史标签（见 chat-filter.js 的 planPromptTagStrip）----
+        const stripChk = panel.querySelector('#breezetts2-strip-history-tags');
+        const stripKeepRow = panel.querySelector('#breezetts2-strip-keep-row');
+        const stripKeepInput = panel.querySelector('#breezetts2-strip-keep');
+        const ensureStripCfg = () => {
+            const s = getSettings();
+            if (!s.stripHistoryTags || typeof s.stripHistoryTags !== 'object') {
+                s.stripHistoryTags = { enabled: true, keep: 1 };
+            }
+            return s.stripHistoryTags;
+        };
+        if (stripChk) {
+            stripChk.onchange = (e) => {
+                const cfg = ensureStripCfg();
+                cfg.enabled = e.target.checked;
+                saveSettings();
+                if (stripKeepRow) stripKeepRow.style.display = e.target.checked ? '' : 'none';
+            };
+        }
+        if (stripKeepInput) {
+            stripKeepInput.onchange = (e) => {
+                const v = parseInt(e.target.value);
+                ensureStripCfg().keep = Number.isFinite(v) ? Math.max(0, Math.min(5, v)) : 1;
+                e.target.value = ensureStripCfg().keep;
+                saveSettings();
+            };
+        }
 
         // 跟随更新开着时，正文每次加载都会被刷成默认值，所以那个框设成只读并说明原因 ——
         // 否则用户敲进去的字会在下次读设置时凭空消失，像是编辑器坏了。
@@ -3977,6 +4019,20 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig,
             if (event_types.CHAT_COMPLETION_PROMPT_READY) {
                 eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, (eventData) => {
                     const settings = getSettings();
+
+                    // ---- 先去掉历史里的标签（只留最近几条当示范）----
+                    // 为什么：模型每轮都能看到自己上一轮写的标签，而"上一条具体例子"比系统提示里的
+                    // 抽象要求更有影响力 —— 情感描述会照着上一轮抄、越写越固定。去掉它们、格式交给
+                    // 提示词约束；留最近一条带标签的消息当活样板，格式漂了能靠它纠回来，顺带把
+                    // "当前场景"也留在了上下文里（否则模型可能每句微调场景名 → 环境音反复重启）。
+                    // 只改这份请求用的副本：聊天记录、显示、以及插件自己读场景名做音效都不受影响。
+                    try {
+                        const stripCfg = settings.stripHistoryTags || {};
+                        eventData.chat = planPromptTagStrip(eventData.chat, stripCfg);
+                    } catch (e) {
+                        console.warn('[MoonVoice] 处理历史标签时出错（本次不处理）:', e);
+                    }
+
                     const config = settings.promptInjection;
                     if (config && config.enabled) {
                         // 注入的是「插件维护的正文」+「用户维护的清单」，两块分开存是为了

@@ -166,3 +166,69 @@ export const PATTERN_PRESETS = [
     { label: '只隐藏场景标签', pattern: '\\[[^\\]\\n]*\\](?=\\s*[「"“『])',
       note: '只藏引号前那一段，角色与情感标签保留' },
 ];
+
+// ============================================================================
+//  喂给模型的那一份：把历史里的标签去掉（只留最近几条当示范）
+// ============================================================================
+//
+// 为什么需要：酒馆发给模型的就是聊天记录原文，标签是正文的一部分。于是模型每轮都能看到
+// 自己上一轮写的 [角色|性别][情感描述][场景] —— 而"上一条具体例子"比系统提示里的抽象要求
+// 更有影响力，情感描述就会照着上一轮抄、越写越固定（自我锚定）。
+//
+// 别的插件是这么治的：把历史里的标签去掉，只靠提示词约束格式；万一格式漂了，就留最近一条
+// 带标签的消息当活样板纠回来。这里照同一路子做，但有两点要注意：
+//
+//   1) **只动请求用的那一份**。插件在 CHAT_COMPLETION_PROMPT_READY 里拿到的 chat 是给这次
+//      请求用的数组（现有的规范注入也在这个钩子里往它里面插消息）。聊天记录文件、显示、
+//      以及插件自己读场景名做音效，读的都是底层原文，都不受影响。
+//   2) **保留的那条不只是格式样板，它还带着"当前场景"**。全抹掉的话模型可能每句微调场景名
+//      （雨声 / 雨声_室内 之间来回），那会让环境音反复重启、事件轨反复触发。留最近一条正好
+//      把这个信息也留下了。
+//
+// 本文件仍是纯逻辑（不碰 DOM / ctx），所以能在 Node 里单测。
+
+/**
+ * 行首的标签前缀：1~4 组方括号，**且后面紧跟引号**才认。
+ * 保守是故意的 —— 台词/正文里出现的方括号（比如「[笑声]」）不会被误伤。
+ */
+const TAG_PREFIX_RE = /^[ \t]*(?:\[[^\]\n]*\]){1,4}[ \t]*(?=[「“『"])/gm;
+
+/** 这一行是不是以 [标签]“……” 开头的格式行。 */
+export function hasFormatTags(text) {
+    return typeof text === 'string'
+        && /^[ \t]*(?:\[[^\]\n]*\]){1,4}[ \t]*(?=[「“『"])/m.test(text);
+}
+
+/** 去掉**行首**的标签，保留台词本体。正文里的方括号不动。 */
+export function stripFormatTags(text) {
+    return typeof text === 'string' ? text.replace(TAG_PREFIX_RE, '') : text;
+}
+
+/**
+ * 算出「这次请求要发给模型的 chat」应该长什么样。
+ *
+ * @param {Array} messages  酒馆给的那份 {role, content}[]
+ * @param {{enabled?: boolean, keep?: number}} config
+ *        enabled=false 时原样返回；keep = 保留最近几条**带标签的助手消息**当示范（0 = 全去）
+ * @returns {Array} 新数组（不改原数组；没变化的元素按原引用返回）
+ */
+export function planPromptTagStrip(messages, config = {}) {
+    const out = Array.isArray(messages) ? messages.slice() : [];
+    if (config.enabled === false) return out;
+    const rawKeep = Number(config.keep);
+    const keep = Number.isFinite(rawKeep) ? Math.max(0, Math.min(5, Math.trunc(rawKeep))) : 1;
+
+    // 从尾部往前挑：最近 keep 条带标签的助手消息原样留着
+    const demo = new Set();
+    for (let i = out.length - 1; i >= 0 && demo.size < keep; i--) {
+        const m = out[i];
+        if (m && m.role === 'assistant' && hasFormatTags(m.content)) demo.add(i);
+    }
+
+    return out.map((m, i) => {
+        // 只处理助手消息：标签只由模型产出，用户自己打的方括号不该被碰
+        if (!m || m.role !== 'assistant' || typeof m.content !== 'string' || demo.has(i)) return m;
+        const stripped = stripFormatTags(m.content);
+        return stripped === m.content ? m : { ...m, content: stripped };
+    });
+}

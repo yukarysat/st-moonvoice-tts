@@ -282,6 +282,23 @@ The "filter regex" field accepts two useful patterns out of the box:
 > text sent to TTS** (enabling it skips the built-in hard filter used by audiobook mode). It controls
 > *what gets read*, not *what gets displayed*.
 
+
+### Why don't the emotion descriptions ossify?
+
+The model sees the whole chat history each round — including the tags it wrote itself last round. A
+concrete example one message back outweighs the abstract requirement in the injected prompt, so the
+emotion descriptions start echoing the previous line and get more and more repetitive (self-anchoring).
+
+So the extension **strips the leading tags from the history before it is sent to the model**. This
+affects that one request only: **the chat file, the chat bubbles, and the extension's own reading of
+the scene name for audio all use the raw text and are unchanged.** The format is enforced by the
+prompt instead, and the **most recent tagged message is kept verbatim** as a live example — so if the
+format ever drifts, that line pulls it back. It also carries the *current scene*, which keeps the
+model from renaming the scene every line (that would restart ambience and re-fire `事件音效01`).
+
+Where: **📝 Prompt management → "注入时去掉历史里的标签"** (on by default); "保留示范条数" below it
+controls how many tagged messages stay (default 1, 0 strips them all).
+
 ## Main features
 
 ### Sentence-by-sentence playback and gaps
@@ -376,8 +393,13 @@ A playback bar independent of the chat log, with separate volume for voice and a
 | Auto NPC voices | on | |
 | NPC voice pool | empty | Empty = every voice in the library with a transcript |
 | Ambience volume | 0.4 | |
+| Ambience 01 volume | 0.3 | The second loop track (BGM); interrupted by 事件音效01 |
 | Ambience fade duration | 0 | 0 means cut instantly |
 | Event volume | 0.6 | Independent of ambience |
+| Loop scene audio within a scene | off | Off = loop tracks restart every line (legacy behaviour) |
+| Hide bracket tags | on | Manages a SillyTavern regex (**display only**) that hides `[character][emotion][scene]` from chat bubbles; chats and prompt unchanged |
+| Strip tags from history | on | Leading tags are removed from what is sent to the model (chat file and display unchanged) so emotion descriptions don't self-anchor; the most recent tagged message is kept as a live example |
+| Example messages kept | 1 | How many tagged messages stay as a format example (0 = strip them all) |
 | Floating player | on | |
 | Prompt injection | on | Injects the format spec at the configured depth. Stored as two pieces: the **body** follows plugin updates, the **available-sound list** is always yours |
 | Follow prompt updates | on | Turn it off and the body is yours too (the panel says whether the body is read-only or editable) |
