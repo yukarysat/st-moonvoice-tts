@@ -387,6 +387,8 @@ testing showed more work, yet not everything does. So this ships as an experimen
 - When on, the prompt lists **only the events in your own list**, so the model cannot invent ones that do nothing
 - Events must go **inside the quotes** (the dialogue text); outside they would become a fourth bracket and
   break the `[character][emotion][scene]“content”` parsing
+- **Use them only when the mood and context fit**: measured behaviour is that a mismatched event is
+  weakened or silently skipped, so the prompt says so and allows at most one event per line
 
 
 ## Settings
