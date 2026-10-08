@@ -383,9 +383,12 @@ Breeze TTS 2 can perform inline vocal events inside the dialogue text (`[笑]`, 
 reading the words out. **Testing showed the behaviour is not stable**, so it ships as an experiment — turn
 it on under **📝 Prompt management →「发声事件（实验性）」** (off by default).
 
-- **No whitelist**: the model writes events freely. Measured behaviour is that the same line sometimes
-  performs the event and sometimes does not, so restricting the list does not guarantee anything while
-  costing expressiveness; invalid or unfitting events are simply skipped and never break the audio
+- **No whitelist**: the model writes events freely. Whether an event is performed depends on **sampling**
+  (the same line with a different seed sounds clearly different), so restricting the list does not guarantee
+  anything while costing expressiveness; invalid or unfitting events are simply skipped and never break the audio
+- **It is reproducible here**: measured, the same text + instruction + voice + **seed** gives a byte-identical
+  result; the extension always uses `seed=42`, so a given line behaves **stably** (an event either always fires
+  on it or never does) — only a different line or context changes that
 - The "common events" field is only a set of **examples** for the model (it may be left empty)
 - **Position matters**: mid-sentence is the most reliable; at the very start or end an event is sometimes
   swallowed (the prompt says so)
