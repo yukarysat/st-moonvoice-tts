@@ -377,6 +377,18 @@ Writing `[]` or omitting the third bracket stops **all loop tracks**.
 
 A playback bar independent of the chat log, with separate volume for voice and ambience.
 
+### Vocal events (experimental, off by default)
+
+Breeze TTS 2 can perform inline vocal events written inside the dialogue text (`[笑]`, `[叹气]`, …) instead
+of reading the words out. But the model card only lists **four examples and the real range is unclear** —
+testing showed more work, yet not everything does. So this ships as an experiment:
+
+- **Off by default**; enable it under **📝 Prompt management →「发声事件（实验性）」**
+- When on, the prompt lists **only the events in your own list**, so the model cannot invent ones that do nothing
+- Events must go **inside the quotes** (the dialogue text); outside they would become a fourth bracket and
+  break the `[character][emotion][scene]“content”` parsing
+
+
 ## Settings
 
 | Setting | Default | Notes |
@@ -407,6 +419,7 @@ A playback bar independent of the chat log, with separate volume for voice and a
 | Example messages kept | 1 | How many tagged messages stay as a format example. Keep at least 1 — with 0 there is no format example in context at all |
 | Floating player | on | |
 | Prompt injection | on | Injects the format spec at the configured depth (4 = before the 4th message from the end; **in short contexts such as a brand-new chat it hugs the end** instead of landing before the character card). Stored as two pieces: the **body** follows plugin updates, the **available-sound list** is always yours |
+| Vocal events (experimental) | off | Lets the model use inline `[笑]`/`[叹气]` events; only the list you maintain is offered to it |
 | Follow prompt updates | on | Turn it off and the body is yours too (the panel says whether the body is read-only or editable) |
 | Regex filter | off | Turning it on **replaces the built-in filtering** (audiobook mode hard-filters markdown and similar decoration) with your own regex |
 
