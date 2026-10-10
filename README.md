@@ -380,6 +380,14 @@ git clone https://github.com/yukarysat/st-moonvoice-tts.git ST-MoonVoice
 
 独立于聊天记录的播放控制条，人声音量与环境音音量分开控制。
 
+## 出门在外也能用
+
+人在外面（手机 / 平板 / 笔记本）想继续用家里那台电脑的酒馆与月声后端：用 Tailscale 这类虚拟局域网把
+两边放进同一个网，再把插件里的服务地址从 `192.168.x.x` 换成 Tailscale 的 `100.x.y.z` 即可 ——
+不用公网 IP、不用改路由器。完整步骤（含酒馆白名单、电源设置、备选方案与排查）见
+[docs/REMOTE-ACCESS.md](docs/REMOTE-ACCESS.md)；整合包里还带了 `远程访问检查.cmd`，
+出门前跑一次就会告诉你该填什么地址、还差哪一步。
+
 ## 设置项
 
 | 设置项 | 默认 | 说明 |
