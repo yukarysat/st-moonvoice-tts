@@ -377,27 +377,6 @@ Writing `[]` or omitting the third bracket stops **all loop tracks**.
 
 A playback bar independent of the chat log, with separate volume for voice and ambience.
 
-### Vocal events (experimental, off by default)
-
-Breeze TTS 2 can perform inline vocal events inside the dialogue text (`[笑]`, `[叹气]`, …) instead of
-reading the words out. **Testing showed the behaviour is not stable**, so it ships as an experiment — turn
-it on under **📝 Prompt management →「发声事件（实验性）」** (off by default).
-
-- **No whitelist**: the model writes events freely. Whether an event is performed depends on **sampling**
-  (the same line with a different seed sounds clearly different), so restricting the list does not guarantee
-  anything while costing expressiveness; invalid or unfitting events are simply skipped and never break the audio
-- **It is reproducible here**: measured, the same text + instruction + voice + **seed** gives a byte-identical
-  result; the extension always uses `seed=42`, so a given line behaves **stably** (an event either always fires
-  on it or never does) — only a different line or context changes that
-- The "common events" field is only a set of **examples** for the model (it may be left empty)
-- **Position matters**: mid-sentence is the most reliable; at the very start or end an event is sometimes
-  swallowed (the prompt says so)
-- **The mood must fit**: a mismatched event is weakened or silently skipped (the prompt says so, and allows
-  at most one event per line)
-- Events must go **inside the quotes**; outside they would become a fourth bracket and break the
-  `[character][emotion][scene]“content”` parsing
-
-
 ## Settings
 
 | Setting | Default | Notes |
@@ -428,7 +407,6 @@ it on under **📝 Prompt management →「发声事件（实验性）」** (off
 | Example messages kept | 1 | How many tagged messages stay as a format example. Keep at least 1 — with 0 there is no format example in context at all |
 | Floating player | on | |
 | Prompt injection | on | Injects the format spec at the configured depth (4 = before the 4th message from the end; **in short contexts such as a brand-new chat it hugs the end** instead of landing before the character card). Stored as two pieces: the **body** follows plugin updates, the **available-sound list** is always yours |
-| Vocal events (experimental) | off | Lets the model use inline `[笑]`/`[叹气]` events (free-form, no whitelist); behaviour is unstable and invalid events are silently skipped |
 | Follow prompt updates | on | Turn it off and the body is yours too (the panel says whether the body is read-only or editable) |
 | Regex filter | off | Turning it on **replaces the built-in filtering** (audiobook mode hard-filters markdown and similar decoration) with your own regex |
 

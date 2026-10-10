@@ -9,7 +9,6 @@
 import { TRACK_RULES, createMixState, planScene, isEventName,
          catalogFromTracks, catalogFromLegacy, emptyCatalog } from './scene-mixer.js';
 import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStrip, applyPromptTagStripInPlace, planSpecInsertIndex,
-         buildVocalEventLine, normalizeVocalEvents, DEFAULT_VOCAL_EVENTS,
          buildSceneHideScript, upsertScript, removeScript, findScript } from './chat-filter.js';
 (function () {
     // 设置存储键：写进 SillyTavern 的 extension_settings，一旦改动用户配置就会丢，绝不可改
@@ -105,13 +104,6 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
         stripHistoryTags: {
             enabled: true,
             keep: 1,
-        },
-        // 发声事件（实验性）：Breeze 支持在台词里内联 [笑]/[叹气] 这类事件，模型会"演"出来。
-        // 但官方只给了 4 个示例、实际范围不明，所以默认关闭，且只把用户维护的清单交给模型
-        // （避免模型自创无效事件）。清单可在面板里编辑 —— 实测有效就往里加。
-        vocalEvents: {
-            enabled: false,
-            list: DEFAULT_VOCAL_EVENTS.join('、'),
         },
         regexFilter: {
             enabled: false,
@@ -3429,10 +3421,6 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-prompt-follow">正文跟随插件更新</label><input type="checkbox" id="breezetts2-prompt-follow"${settings.promptInjection?.followUpdates !== false ? ' checked' : ''}></div>
                             <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">提示词分两块：<strong>正文</strong>（格式规范、情感描述要求、示例）跟随插件更新，每次加载都刷成最新版；<strong>可用音效清单</strong>永远归你，插件不会动它。想在正文里写自己的东西，就把上面这个开关关掉。</div>
                             <div class="breezetts2-setting-row"><label>注入深度</label><input type="number" id="breezetts2-prompt-depth" class="text_pole" value="${settings.promptInjection?.depth ?? 4}" min="0"></div>
-                            <!-- 发声事件（实验性）：见 chat-filter.js 的 buildVocalEventLine -->
-                            <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-vocal-events">发声事件（实验性）</label><input type="checkbox" id="breezetts2-vocal-events" ${settings.vocalEvents?.enabled ? 'checked' : ''}></div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">允许模型在台词里写 <code>[笑]</code> <code>[叹气]</code> 这类发声事件（模型会把它"演"出来）。实测：事件是否发声取决于抽样（同一句换个 seed 结果就明显不同；插件固定 seed=42，所以同一句的表现是稳定的），无效事件会被静默跳过、不会破坏音频，所以这里<b>不做白名单</b>；下面的清单只是给模型的"常见例子"，可留空。<b>效果还取决于位置与语境</b>：放句中较稳，放句首/句尾有时被吞掉。</div>
-                            <div class="breezetts2-setting-row" id="breezetts2-vocal-list-row" style="${settings.vocalEvents?.enabled ? '' : 'display: none;'}"><label>常见事件（参考）</label><input type="text" id="breezetts2-vocal-list" class="text_pole" value="${settings.vocalEvents?.list || DEFAULT_VOCAL_EVENTS.join('、')}" placeholder="留空也行；例：笑、咳嗽、叹气" style="flex: 1;"></div>
                             <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">数字是"从末尾往前数第几条"：4 = 插在倒数第 4 条之前。<b>对话很短（比如刚开的新对话）时不会再被挤到最前面</b>，会紧贴末尾；想让它始终贴着生成点就填 1（0 = 插到最后）。</div>
                             <div class="breezetts2-setting-row"><label>角色</label><select id="breezetts2-prompt-role" class="text_pole"><option value="system"${settings.promptInjection?.role === 'system' ? ' selected' : ''}>System</option><option value="user"${settings.promptInjection?.role === 'user' ? ' selected' : ''}>User</option><option value="assistant"${settings.promptInjection?.role === 'assistant' ? ' selected' : ''}>Assistant</option></select></div>
                             <!-- 喂给模型的历史里去掉标签：逻辑在 chat-filter.js 的 planPromptTagStrip -->
@@ -3670,34 +3658,6 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
                 saveSettings();
             };
         }
-
-        // ---- 发声事件（实验性，见 chat-filter.js 的 buildVocalEventLine）----
-        const vocalChk = panel.querySelector('#breezetts2-vocal-events');
-        const vocalListRow = panel.querySelector('#breezetts2-vocal-list-row');
-        const vocalListInput = panel.querySelector('#breezetts2-vocal-list');
-        const ensureVocalCfg = () => {
-            const s = getSettings();
-            if (!s.vocalEvents || typeof s.vocalEvents !== 'object') {
-                s.vocalEvents = { enabled: false, list: DEFAULT_VOCAL_EVENTS.join('、') };
-            }
-            return s.vocalEvents;
-        };
-        if (vocalChk) {
-            vocalChk.onchange = (e) => {
-                ensureVocalCfg().enabled = e.target.checked;
-                saveSettings();
-                if (vocalListRow) vocalListRow.style.display = e.target.checked ? '' : 'none';
-            };
-        }
-        if (vocalListInput) {
-            vocalListInput.onchange = (e) => {
-                const list = normalizeVocalEvents(e.target.value);
-                ensureVocalCfg().list = list.join('、');
-                e.target.value = ensureVocalCfg().list;
-                saveSettings();
-            };
-        }
-
 
         // 跟随更新开着时，正文每次加载都会被刷成默认值，所以那个框设成只读并说明原因 ——
         // 否则用户敲进去的字会在下次读设置时凭空消失，像是编辑器坏了。
@@ -4079,9 +4039,7 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
                     if (config && config.enabled) {
                         // 注入的是「插件维护的正文」+「用户维护的清单」，两块分开存是为了
                         // 让正文能随版本更新，而用户增删音效名不会被冲掉。
-                        const vocal = settings.vocalEvents || {};
-                        const vocalLine = vocal.enabled ? buildVocalEventLine(vocal.list) : '';
-                        const content = [config.body, vocalLine, config.sceneList]
+                        const content = [config.body, config.sceneList]
                             .filter(s => typeof s === 'string' && s.trim())
                             .join('\n\n');
                         if (!content) return;
