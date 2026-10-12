@@ -8,7 +8,7 @@
 // 本文件由酒馆以 type="module" 加载，所以可以直接 import。
 import { TRACK_RULES, createMixState, planScene, isEventName,
          catalogFromTracks, catalogFromLegacy, emptyCatalog } from './scene-mixer.js';
-import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStrip, applyPromptTagStripInPlace, planSpecInsertIndex,
+import { DEFAULT_PATTERN, DEFAULT_FLAGS, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStrip, applyPromptTagStripInPlace, planSpecInsertIndex,
          buildSceneHideScript, upsertScript, removeScript, findScript } from './chat-filter.js';
 (function () {
     // 设置存储键：写进 SillyTavern 的 extension_settings，一旦改动用户配置就会丢，绝不可改
@@ -79,6 +79,7 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
         chatTagHiding: {
             enabled: true,
             pattern: DEFAULT_PATTERN,
+            flags: DEFAULT_FLAGS,
         },
         voiceMap: {},
         promptInjection: {
@@ -3472,9 +3473,9 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
                         <div class="breezetts2-setting-module">
                             <div class="breezetts2-module-header">💬 聊天显示</div>
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-hide-tags">隐藏聊天里的方括号标签</label><input type="checkbox" id="breezetts2-hide-tags" ${settings.chatTagHiding?.enabled ? 'checked' : ''}></div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">把 <code>[角色|性别][情感][场景]</code> 这串标签从气泡里藏掉，只留台词（只改显示，聊天记录与提示词不变）。</div>
+                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">把 <b>行首</b>那串 <code>[角色|性别][情感][场景]</code> 从气泡里藏掉，只留台词（只改显示：聊天记录与提示词都不变）。<b>行内的方括号一概不碰</b> —— 所以不会影响别的预设/插件（例如把 <code>&lt;options&gt;</code> 渲染成按钮那种）。</div>
                             <div class="breezetts2-setting-row" id="breezetts2-hide-tags-row" style="${settings.chatTagHiding?.enabled ? '' : 'display: none;'}"><label style="flex: 0 0 auto; margin-right: 8px;">过滤正则</label><input type="text" id="breezetts2-hide-tags-pattern" class="text_pole" value="${settings.chatTagHiding?.pattern || ''}" placeholder="\\[[^\\]\\n]*\\]" style="flex: 1;"></div>
-                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-presets" style="font-size:0.85em; opacity:0.7; ${settings.chatTagHiding?.enabled ? '' : 'display: none;'}">现成的两个，直接抄进上面那栏：<br>${PATTERN_PRESETS.map(p => `　<code>${p.pattern}</code> —— ${p.label}（${p.note}）`).join('<br>')}</div>
+                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-presets" style="font-size:0.85em; opacity:0.7; ${settings.chatTagHiding?.enabled ? '' : 'display: none;'}">现成的几档，直接抄进上面那栏（写成 <code>/模式/标志</code> 的完整形式）：<br>${PATTERN_PRESETS.map(p => `　<code>/${p.pattern}/${p.flags}</code> —— ${p.label}（${p.note}）`).join('<br>')}</div>
                             <div class="breezetts2-setting-row" id="breezetts2-hide-tags-status" style="font-size:0.85em;"></div>
                         </div>
                         <!-- 场景音效：本模块只管音量 / 淡入淡出这类播放参数。
@@ -3724,7 +3725,7 @@ import { DEFAULT_PATTERN, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStr
         const hideTagsEnsureCfg = () => {
             const s = getSettings();
             if (!s.chatTagHiding || typeof s.chatTagHiding !== 'object') {
-                s.chatTagHiding = { enabled: false, pattern: DEFAULT_PATTERN };
+                s.chatTagHiding = { enabled: false, pattern: DEFAULT_PATTERN, flags: DEFAULT_FLAGS };
             }
             return s.chatTagHiding;
         };

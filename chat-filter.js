@@ -38,9 +38,23 @@ export const BRACKET_TAG_HIDE_NAME = '月声 · 隐藏方括号标签';
  */
 export const LEGACY_SCRIPT_IDS = ['moonvoice-hide-scene-tags'];
 
-/** 默认把方括号标签整段删掉（[角色|性别][情感][场景] 三段都删）。 */
-export const DEFAULT_PATTERN = '\\[[^\\]\\n]*\\]';
-export const DEFAULT_FLAGS = 'g';
+/**
+ * 我们要藏的**只有自己造出来的那个形状**：
+ *   行首 → [角色|性别] → 至多 3 个 [情感]/[场景]/[] → （台词）
+ * 判定依据是第一个标签里必须有 "|" —— 那是 [角色|性别] 独有的标志。
+ *
+ * 为什么必须这么窄（血泪教训，2026-10）：早期版本用的是 /\[[^\]\n]*\]/g，
+ * 匹配消息里**任意位置**的方括号。Reborn2.3 这类预设的「行动选项」会把 <options> 整块
+ * 替换成一段 HTML（内含 <style>、<script>、JSON），里面的 [..] 被我们删掉一处，
+ * 整段 HTML/脚本就崩了 —— 表现为"打开隐藏标签后，行动选项按钮消失"。
+ * 行内的 [笑]、markdown 链接 [文字](url)、CSS 属性选择器 input[type=..]、JS 数组，
+ * 都会被旧模式误伤。
+ */
+export const DEFAULT_PATTERN = '^[ \\t]*\\[[^\\]\\n]*\\|[^\\]\\n]*\\](?:[ \\t]*\\[[^\\]\\n]*\\]){0,3}';
+export const DEFAULT_FLAGS = 'gm';
+
+/** 旧版本的默认模式（任意方括号）。老用户存的是它时自动升级为新默认。 */
+export const LEGACY_DEFAULT_PATTERN = '\\[[^\\]\\n]*\\]';
 
 /** 显示管线实际会传的 placement：1=USER_INPUT，2=AI_OUTPUT。 */
 export const DISPLAY_PLACEMENTS = [1, 2];
@@ -95,7 +109,8 @@ export function validatePattern(pattern, flags) {
  */
 export function buildSceneHideScript(config = {}) {
     const { pattern, flags } = normalizeRegexInput(
-        config.pattern === undefined ? DEFAULT_PATTERN : config.pattern, DEFAULT_FLAGS);
+        config.pattern === undefined ? DEFAULT_PATTERN : config.pattern,
+        config.flags || DEFAULT_FLAGS);
     if (validatePattern(pattern, flags)) return null;
     return {
         id: BRACKET_TAG_HIDE_ID,
@@ -153,18 +168,44 @@ export function pickTagHidingConfig(settings, defaultEnabled = true) {
     const cur = settings && settings.chatTagHiding;
     const old = settings && settings.sceneTagHiding;
     const src = (cur && typeof cur === 'object') ? cur : ((old && typeof old === 'object') ? old : {});
+    const rawPattern = typeof src.pattern === 'string' && src.pattern ? src.pattern : DEFAULT_PATTERN;
     return {
         enabled: typeof src.enabled === 'boolean' ? src.enabled : defaultEnabled,
-        pattern: typeof src.pattern === 'string' && src.pattern ? src.pattern : DEFAULT_PATTERN,
+        // 旧默认值自动升级为新默认（用户自己写过的模式一律不动）
+        pattern: rawPattern === LEGACY_DEFAULT_PATTERN ? DEFAULT_PATTERN : rawPattern,
+        // 老版本没有 flags 字段；升级后默认要带 m（^ 才能按行匹配）
+        flags: typeof src.flags === 'string' && src.flags ? src.flags : DEFAULT_FLAGS,
     };
 }
 
+
 /** 面板上给用户抄的两个现成模式。 */
 export const PATTERN_PRESETS = [
-    { label: '隐藏全部方括号标签', pattern: DEFAULT_PATTERN,
-      note: '默认；[角色|性别][情感][场景] 三段都藏掉，只留台词' },
-    { label: '只隐藏场景标签', pattern: '\\[[^\\]\\n]*\\](?=\\s*[「"“『])',
-      note: '只藏引号前那一段，角色与情感标签保留' },
+    {
+        label: '行首标签簇（默认，最安全）',
+        pattern: DEFAULT_PATTERN,
+        flags: DEFAULT_FLAGS,
+        note: '只藏行首那串 [角色|性别][情感][场景]，行内方括号、markdown 链接、其它插件的 HTML 都不碰',
+    },
+    {
+        label: '行首任意方括号（卡里没写 | 时用）',
+        pattern: '^[ \\t]*(?:\\[[^\\]\\n]*\\]){1,4}',
+        flags: 'gm',
+        note: '不要求第一个标签含 |；仍然只看行首，比默认略宽一点',
+    },
+    {
+        label: '只隐藏场景标签',
+        pattern: '\\[[^\\]\\n]*\\](?=\\s*[「"“『])',
+        flags: 'g',
+        note: '只藏引号前那一段（角色与情感标签保留）；行内方括号若紧跟引号也可能被碰到',
+    },
+    {
+        label: '隐藏所有方括号（旧版行为，可能冲突 ✗）',
+        pattern: LEGACY_DEFAULT_PATTERN,
+        flags: 'g',
+        note: '会误伤其它预设/插件生成的内容（例如 Reborn 的「行动选项」把 <options> 换成整段 HTML，'
+            + '里面的 [..] 被删掉就崩了）—— 除非你确定没有这类功能，否则别用',
+    },
 ];
 
 /**

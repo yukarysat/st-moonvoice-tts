@@ -377,6 +377,25 @@ Writing `[]` or omitting the third bracket stops **all loop tracks**.
 
 A playback bar independent of the chat log, with separate volume for voice and ambience.
 
+### Hiding bracket tags: only the leading cluster
+
+The plugin **manages one display-only SillyTavern regex** (`月声 · 隐藏方括号标签`, visible in the regex panel).
+It changes the bubble only — never the chat record, never the prompt sent to the model.
+
+By default it matches **only the shape we produce ourselves**:
+
+```
+start of line -> [character|gender] -> up to 3 [emotion]/[scene]/[] tags -> dialogue
+```
+
+The marker is the `|` inside the first tag. So inline brackets are left alone: inline hints like `[笑]`,
+markdown links `[text](url)`, and HTML/CSS/JS produced by other presets or extensions are untouched.
+
+> ⚠️ **This default exists because of a real breakage**: the early version matched any bracket anywhere
+> (`\[[^\]\n]*\]`) and destroyed Reborn2.3-style "action options" — those replace `<options>` with a whole
+> HTML document, and deleting one bracket pair inside it kills the styles/script, so the buttons vanished.
+> Stored old defaults are upgraded automatically; patterns you wrote yourself are never changed.
+
 ## Settings
 
 | Setting | Default | Notes |
@@ -402,7 +421,7 @@ A playback bar independent of the chat log, with separate volume for voice and a
 | Ambience fade duration | 0 | 0 means cut instantly |
 | Event volume | 0.6 | Independent of ambience |
 | Loop scene audio within a scene | off | Off = loop tracks restart every line (legacy behaviour) |
-| Hide bracket tags | on | Manages a SillyTavern regex (**display only**) that hides `[character][emotion][scene]` from chat bubbles; chats and prompt unchanged |
+| Hide bracket tags | on | Hides only the **leading** `[character|gender][emotion][scene]` cluster; inline brackets and other extensions' HTML are untouched (display only) |
 | Strip tags from history | on | Leading tags are removed from what is sent to the model (chat file and display unchanged) so emotion descriptions don't self-anchor; the most recent tagged message is kept as a live example |
 | Example messages kept | 1 | How many tagged messages stay as a format example. Keep at least 1 — with 0 there is no format example in context at all |
 | Floating player | on | |
