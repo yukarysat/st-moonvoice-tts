@@ -55,6 +55,8 @@ export const DEFAULT_FLAGS = 'gm';
 
 /** 旧版本的默认模式（任意方括号）。老用户存的是它时自动升级为新默认。 */
 export const LEGACY_DEFAULT_PATTERN = '\\[[^\\]\\n]*\\]';
+/** 旧版本的默认标志。 */
+export const LEGACY_DEFAULT_FLAGS = 'g';
 
 /** 显示管线实际会传的 placement：1=USER_INPUT，2=AI_OUTPUT。 */
 export const DISPLAY_PLACEMENTS = [1, 2];
@@ -169,12 +171,19 @@ export function pickTagHidingConfig(settings, defaultEnabled = true) {
     const old = settings && settings.sceneTagHiding;
     const src = (cur && typeof cur === 'object') ? cur : ((old && typeof old === 'object') ? old : {});
     const rawPattern = typeof src.pattern === 'string' && src.pattern ? src.pattern : DEFAULT_PATTERN;
+    const isLegacyDefault = rawPattern === LEGACY_DEFAULT_PATTERN;
     return {
         enabled: typeof src.enabled === 'boolean' ? src.enabled : defaultEnabled,
         // 旧默认值自动升级为新默认（用户自己写过的模式一律不动）
-        pattern: rawPattern === LEGACY_DEFAULT_PATTERN ? DEFAULT_PATTERN : rawPattern,
-        // 老版本没有 flags 字段；升级后默认要带 m（^ 才能按行匹配）
-        flags: typeof src.flags === 'string' && src.flags ? src.flags : DEFAULT_FLAGS,
+        pattern: isLegacyDefault ? DEFAULT_PATTERN : rawPattern,
+        // 老版本没有 flags 字段。迁移到新默认时补上 m（新默认靠 ^ 按行匹配）；
+        // 用户自己的模式沿用旧的默认 g —— 不能因为一次升级就悄悄改变他模式的语义。
+        // 判据要落在「最终生效的模式」上：全新用户没存过 pattern 时也走 DEFAULT_PATTERN，
+        // 那时同样必须带 m，否则 ^ 只在整条消息开头生效、标签根本藏不掉。
+        flags: typeof src.flags === 'string' && src.flags
+            ? src.flags
+            : ((isLegacyDefault ? DEFAULT_PATTERN : rawPattern) === DEFAULT_PATTERN
+                ? DEFAULT_FLAGS : LEGACY_DEFAULT_FLAGS),
         replace: typeof src.replace === 'string' ? src.replace : '',
     };
 }

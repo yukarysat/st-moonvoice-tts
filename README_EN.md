@@ -414,6 +414,23 @@ The filtering rule in **Chat display** is now a **scheme**:
 Every long explanatory paragraph in the panel is now folded into an inline **`i`** tip: hover or click to
 expand (click matters on phones, where hover does not exist). Rows keep only their controls and labels.
 
+### What happens to my regex after upgrading?
+
+The plugin manages exactly **one** SillyTavern regex (fixed id `moonvoice-hide-bracket-tags`, shown as
+`月声 · 隐藏方括号标签`). On upgrade:
+
+| What you had | After upgrading |
+| --- | --- |
+| The old default (any-bracket pattern) | **Replaced by the narrowed default** (leading cluster only) with `gm`; the same-id script in SillyTavern is overwritten |
+| A pattern you wrote yourself | **Kept as-is**, flags included (an upgrade never silently changes your pattern's semantics) |
+| The feature turned off | Stays off; only the stored pattern is tidied up |
+
+**No other regex is ever touched**: only that one id is created/updated/removed (plus cleanup of the old
+early-version id `moonvoice-hide-scene-tags`). `setup/236` has an assertion guarding exactly that.
+
+> ⚠️ The script is **managed**: you can see it in SillyTavern's regex panel, but edit it in the **plugin
+> panel** — a direct edit there is synced back on the next load.
+
 ## Settings
 
 | Setting | Default | Notes |
