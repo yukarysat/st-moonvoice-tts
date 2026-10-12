@@ -166,6 +166,26 @@ export function findScript(list) {
  * GAL 那串标签读起来很吵，多数人只想看台词）。只有键缺失或值不是布尔时才用这个默认值。
  * @returns {{enabled: boolean, pattern: string}}
  */
+/**
+ * 把设置里的「隐藏方括号标签」归一化（迁移旧键、升级旧默认模式、补 flags/replace），
+ * 并告诉调用方**要不要写回**。
+ *
+ * 为什么需要它：pickTagHidingConfig() 只在内存里算出该用哪个模式，不会改设置本身。
+ * 早期实现只在「存在旧键 sceneTagHiding」时才写回一次，于是已经用过新键的老用户永远走不到
+ * 那一步 —— 托管正则换成了新的（过滤效果是对的），但面板那一栏读的是存储里的旧值，
+ * 显示成旧模式，看起来像没升级（2026-10 用户实测报过）。
+ *
+ * @returns {{config: object, changed: boolean, hadLegacy: boolean}}
+ */
+export function normalizeTagHidingSettings(settings) {
+    const s = settings || {};
+    const before = JSON.stringify(s.chatTagHiding || null);
+    const config = pickTagHidingConfig(s);
+    const hadLegacy = !!(s.sceneTagHiding && typeof s.sceneTagHiding === 'object');
+    const changed = hadLegacy || before !== JSON.stringify(config);
+    return { config, changed, hadLegacy };
+}
+
 export function pickTagHidingConfig(settings, defaultEnabled = true) {
     const cur = settings && settings.chatTagHiding;
     const old = settings && settings.sceneTagHiding;
