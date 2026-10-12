@@ -396,6 +396,19 @@ markdown links `[text](url)`, and HTML/CSS/JS produced by other presets or exten
 > HTML document, and deleting one bracket pair inside it kills the styles/script, so the buttons vanished.
 > Stored old defaults are upgraded automatically; patterns you wrote yourself are never changed.
 
+### Panel: scheme dropdown and the "i" tips
+
+The filtering rule in **Chat display** is now a **scheme**:
+
+- The dropdown has three parts: **built-in schemes** (updated with the plugin) / **my schemes**
+  (yours, never overwritten by updates) / **current (custom)**
+- Editing "scheme content" switches to **current (custom)** — that is the "changed but not saved" state.
+  Give it a name and press **Save as scheme** to keep it in the list; **Delete** only removes your own
+- A name that collides with a built-in scheme is refused, so the shipped ones always stay intact
+
+Every long explanatory paragraph in the panel is now folded into an inline **`i`** tip: hover or click to
+expand (click matters on phones, where hover does not exist). Rows keep only their controls and labels.
+
 ## Settings
 
 | Setting | Default | Notes |

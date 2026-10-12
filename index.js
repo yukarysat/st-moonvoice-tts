@@ -8,8 +8,23 @@
 // 本文件由酒馆以 type="module" 加载，所以可以直接 import。
 import { TRACK_RULES, createMixState, planScene, isEventName,
          catalogFromTracks, catalogFromLegacy, emptyCatalog } from './scene-mixer.js';
-import { DEFAULT_PATTERN, DEFAULT_FLAGS, PATTERN_PRESETS, pickTagHidingConfig, planPromptTagStrip, applyPromptTagStripInPlace, planSpecInsertIndex,
-         buildSceneHideScript, upsertScript, removeScript, findScript } from './chat-filter.js';
+import {
+         DEFAULT_PATTERN,
+         DEFAULT_FLAGS,
+         PATTERN_PRESETS,
+         pickTagHidingConfig,
+         planPromptTagStrip,
+         applyPromptTagStripInPlace,
+         planSpecInsertIndex,
+         buildSceneHideScript,
+         upsertScript,
+         removeScript,
+         findScript,
+         listSchemes,
+         matchSchemeName,
+         addUserScheme,
+         removeUserScheme,
+         normalizeRegexInput } from './chat-filter.js';
 (function () {
     // 设置存储键：写进 SillyTavern 的 extension_settings，一旦改动用户配置就会丢，绝不可改
     const extensionName = "st-breezetts2";
@@ -80,6 +95,7 @@ import { DEFAULT_PATTERN, DEFAULT_FLAGS, PATTERN_PRESETS, pickTagHidingConfig, p
             enabled: true,
             pattern: DEFAULT_PATTERN,
             flags: DEFAULT_FLAGS,
+            userSchemes: [],   // 用户自己存的过滤方案（下拉里的「我的方案」）
         },
         voiceMap: {},
         promptInjection: {
@@ -3371,6 +3387,23 @@ import { DEFAULT_PATTERN, DEFAULT_FLAGS, PATTERN_PRESETS, pickTagHidingConfig, p
         return { checkUpdate, scheduleCheck, hasUpdate: () => hasUpdate };
     })();   
     // ==================== 插件设置面板 ====================
+    /**
+     * 过滤方案下拉的选项：内置方案 / 我的方案 / 当前（自定义）。
+     * 正在用的那个会被 selected；内容与任何方案都不一致时选「当前（自定义）」。
+     */
+    function schemeOptions(cfg) {
+        const cur = cfg || {};
+        const active = matchSchemeName(cur);
+        const all = listSchemes(cur);
+        const render = (list) => list.map(s =>
+            `<option value="${s.name}"${s.name === active ? ' selected' : ''}>${s.name}</option>`).join('');
+        const builtin = all.filter(s => s.builtin);
+        const mine = all.filter(s => !s.builtin);
+        return `<option value=""${active ? '' : ' selected'}>当前（自定义）</option>`
+            + `<optgroup label="内置方案">${render(builtin)}</optgroup>`
+            + (mine.length ? `<optgroup label="我的方案">${render(mine)}</optgroup>` : '');
+    }
+
     function injectSettingsPanel() {
         if (document.getElementById('breezetts2-settings')) {
             const settings = getSettings();
@@ -3420,17 +3453,17 @@ import { DEFAULT_PATTERN, DEFAULT_FLAGS, PATTERN_PRESETS, pickTagHidingConfig, p
                             <div class="breezetts2-module-header">📝 提示词管理</div>
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-prompt-enable">启用提示词注入</label><input type="checkbox" id="breezetts2-prompt-enable"${settings.promptInjection?.enabled ? ' checked' : ''}></div>
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-prompt-follow">正文跟随插件更新</label><input type="checkbox" id="breezetts2-prompt-follow"${settings.promptInjection?.followUpdates !== false ? ' checked' : ''}></div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">提示词分两块：<strong>正文</strong>（格式规范、情感描述要求、示例）跟随插件更新，每次加载都刷成最新版；<strong>可用音效清单</strong>永远归你，插件不会动它。想在正文里写自己的东西，就把上面这个开关关掉。</div>
+                            <div class="breezetts2-setting-row" ><span class="breezetts2-info" tabindex="0">i<span class="breezetts2-info-body">提示词分两块：<strong>正文</strong>（格式规范、情感描述要求、示例）跟随插件更新，每次加载都刷成最新版；<strong>可用音效清单</strong>永远归你，插件不会动它。想在正文里写自己的东西，就把上面这个开关关掉。</span></span></div>
                             <div class="breezetts2-setting-row"><label>注入深度</label><input type="number" id="breezetts2-prompt-depth" class="text_pole" value="${settings.promptInjection?.depth ?? 4}" min="0"></div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">数字是"从末尾往前数第几条"：4 = 插在倒数第 4 条之前。<b>对话很短（比如刚开的新对话）时不会再被挤到最前面</b>，会紧贴末尾；想让它始终贴着生成点就填 1（0 = 插到最后）。</div>
+                            <div class="breezetts2-setting-row" ><span class="breezetts2-info" tabindex="0">i<span class="breezetts2-info-body">数字是"从末尾往前数第几条"：4 = 插在倒数第 4 条之前。<b>对话很短（比如刚开的新对话）时不会再被挤到最前面</b>，会紧贴末尾；想让它始终贴着生成点就填 1（0 = 插到最后）。</span></span></div>
                             <div class="breezetts2-setting-row"><label>角色</label><select id="breezetts2-prompt-role" class="text_pole"><option value="system"${settings.promptInjection?.role === 'system' ? ' selected' : ''}>System</option><option value="user"${settings.promptInjection?.role === 'user' ? ' selected' : ''}>User</option><option value="assistant"${settings.promptInjection?.role === 'assistant' ? ' selected' : ''}>Assistant</option></select></div>
                             <!-- 喂给模型的历史里去掉标签：逻辑在 chat-filter.js 的 planPromptTagStrip -->
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-strip-history-tags">注入时去掉历史里的标签</label><input type="checkbox" id="breezetts2-strip-history-tags" ${settings.stripHistoryTags?.enabled !== false ? 'checked' : ''}></div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">发给模型的历史里，把行首的 <code>[角色|性别][情感][场景]</code> 去掉（<b>聊天记录与显示都不变</b>），免得情感描述照着上一轮抄、越写越固定。格式由提示词约束。</div>
-                            <div class="breezetts2-setting-row" id="breezetts2-strip-keep-row" style="${settings.stripHistoryTags?.enabled !== false ? '' : 'display: none;'}"><label>保留示范条数</label><input type="number" id="breezetts2-strip-keep" class="text_pole" min="0" max="5" value="${settings.stripHistoryTags?.keep ?? 1}" style="width: 80px;"><span style="font-size:0.85em; opacity:0.7;">条（留最近几条做格式示范）。填 <b>0</b> 时历史里没有任何格式实例，若你的模型依赖上下文里的实例，可能会不写标签 —— 建议至少留 1</span></div>
+                            <div class="breezetts2-setting-row" ><span class="breezetts2-info" tabindex="0">i<span class="breezetts2-info-body">发给模型的历史里，把行首的 <code>[角色|性别][情感][场景]</code> 去掉（<b>聊天记录与显示都不变</b>），免得情感描述照着上一轮抄、越写越固定。格式由提示词约束。</span></span></div>
+                            <div class="breezetts2-setting-row" id="breezetts2-strip-keep-row" style="${settings.stripHistoryTags?.enabled !== false ? '' : 'display: none;'}"><label>保留示范条数</label><input type="number" id="breezetts2-strip-keep" class="text_pole" min="0" max="5" value="${settings.stripHistoryTags?.keep ?? 1}" style="width: 80px;"><span class="breezetts2-info" tabindex="0">i<span class="breezetts2-info-body">留最近几条带标签的消息当格式示范。<br>填 <b>0</b> 时历史里没有任何格式实例 —— 若你的模型依赖上下文里的实例，可能会不写标签，GAL 模式就没台词可读了。建议至少留 1。</span></span></div>
                             <div class="breezetts2-setting-row" style="flex-direction:column; align-items:flex-start;"><label style="margin-bottom:5px;">提示词正文<span id="breezetts2-prompt-body-note" style="font-weight:normal; opacity:0.7;"></span></label><textarea id="breezetts2-prompt-body" class="text_pole" rows="6" placeholder="提示词正文...">${settings.promptInjection?.body || ''}</textarea></div>
                             <div class="breezetts2-setting-row" style="flex-direction:column; align-items:flex-start;"><label style="margin-bottom:5px;">可用音效清单（你的，插件不会改它）</label><textarea id="breezetts2-prompt-scenelist" class="text_pole" rows="5" placeholder="#### 正常场景列表：&#10;雨声、森林&#10;#### NSFW场景列表：">${settings.promptInjection?.sceneList || ''}</textarea></div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;" id="breezetts2-prompt-names-hint"></div>
+                            <div class="breezetts2-setting-row" style="font-size:0.9em;" id="breezetts2-prompt-names-hint"></div>
                         </div>
                         <!-- 模块2：播放与自动化 -->
                         <div class="breezetts2-setting-module">
@@ -3460,7 +3493,7 @@ import { DEFAULT_PATTERN, DEFAULT_FLAGS, PATTERN_PRESETS, pickTagHidingConfig, p
                             <!-- 自定义正则过滤：开启后会**替代**听书模式的内置硬过滤（见 index.js:1223），
                                  名字不能叫「启用正则过滤」——那会让人以为不开就没有过滤。 -->
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-regex-enable">自定义正则过滤</label><input type="checkbox" id="breezetts2-regex-enable"${settings.regexFilter?.enabled ? ' checked' : ''}></div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">插件本身带过滤（听书模式下会硬过滤 markdown 等装饰内容）。开启这一项就<strong>改用你自己的正则</strong>，内置过滤会被跳过。</div>
+                            <div class="breezetts2-setting-row"><span class="breezetts2-info" tabindex="0">i<span class="breezetts2-info-body">插件本身带过滤（听书模式下会硬过滤 markdown 等装饰内容）。开启这一项就<strong>改用你自己的正则</strong>，内置过滤会被跳过。</span></span></div>
                             <div class="breezetts2-setting-row" id="breezetts2-regex-row" style="${settings.regexFilter?.enabled ? '' : 'display: none;'}"><label style="flex: 0 0 auto; margin-right: 8px;">正则表达式</label><input type="text" id="breezetts2-regex-pattern" class="text_pole" value="${settings.regexFilter?.pattern || ''}" placeholder="粘贴正则表达式" style="flex: 1;"><button class="menu_button" id="breezetts2-regex-test" title="测试正则">🧪</button></div>
                             <div class="breezetts2-setting-row" id="breezetts2-regex-preview-row" style="${settings.regexFilter?.enabled ? 'font-size: 0.85em; opacity: 0.8;' : 'display: none;'}"><span>过滤预览: </span><span id="breezetts2-regex-preview">无</span></div>
                             <div class="breezetts2-setting-row"><label>默认朗读音色</label><input type="text" id="breezetts2-voice" class="text_pole" value="${settings.defaultVoice}"></div>
@@ -3472,10 +3505,10 @@ import { DEFAULT_PATTERN, DEFAULT_FLAGS, PATTERN_PRESETS, pickTagHidingConfig, p
                              面板上只留一句话，详细说明在 README。默认开启。 -->
                         <div class="breezetts2-setting-module">
                             <div class="breezetts2-module-header">💬 聊天显示</div>
-                            <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-hide-tags">隐藏聊天里的方括号标签</label><input type="checkbox" id="breezetts2-hide-tags" ${settings.chatTagHiding?.enabled ? 'checked' : ''}></div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">把 <b>行首</b>那串 <code>[角色|性别][情感][场景]</code> 从气泡里藏掉，只留台词（只改显示：聊天记录与提示词都不变）。<b>行内的方括号一概不碰</b> —— 所以不会影响别的预设/插件（例如把 <code>&lt;options&gt;</code> 渲染成按钮那种）。</div>
-                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-row" style="${settings.chatTagHiding?.enabled ? '' : 'display: none;'}"><label style="flex: 0 0 auto; margin-right: 8px;">过滤正则</label><input type="text" id="breezetts2-hide-tags-pattern" class="text_pole" value="${settings.chatTagHiding?.pattern || ''}" placeholder="\\[[^\\]\\n]*\\]" style="flex: 1;"></div>
-                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-presets" style="font-size:0.85em; opacity:0.7; ${settings.chatTagHiding?.enabled ? '' : 'display: none;'}">现成的几档，直接抄进上面那栏（写成 <code>/模式/标志</code> 的完整形式）：<br>${PATTERN_PRESETS.map(p => `　<code>/${p.pattern}/${p.flags}</code> —— ${p.label}（${p.note}）`).join('<br>')}</div>
+                            <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-hide-tags">隐藏聊天里的方括号标签 <span class="breezetts2-info" tabindex="0">i<span class="breezetts2-info-body">把<b>行首</b>那串 <code>[角色|性别][情感][场景]</code> 从气泡里藏掉，只留台词。<br><b>只改显示</b>：聊天记录与发给模型的提示词都不变，配音也不受影响。<br><b>行内的方括号一概不碰</b> —— 所以不会影响别的预设/插件（例如把 <code>&lt;options&gt;</code> 渲染成按钮那种）。</span></span></label><input type="checkbox" id="breezetts2-hide-tags" ${settings.chatTagHiding?.enabled ? 'checked' : ''}></div>
+                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-row" style="${settings.chatTagHiding?.enabled ? '' : 'display: none;'}"><label style="flex: 0 0 auto; margin-right: 8px;">过滤方案 <span class="breezetts2-info" tabindex="0">i<span class="breezetts2-info-body"><b>内置方案</b>随插件更新；<b>我的方案</b>是你自己存的，永远不会被更新覆盖。<br>下拉里还有一项「当前（自定义）」：你直接改下面的方案内容时会选中它 —— 那表示"改了但还没存"。<br>想留着自己用就起个名字点「存为方案」。</span></span></label><select id="breezetts2-hide-tags-scheme" style="flex: 1;">${schemeOptions(settings.chatTagHiding)}</select></div>
+                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-pattern-row" style="${settings.chatTagHiding?.enabled ? '' : 'display: none;'}"><label style="flex: 0 0 auto; margin-right: 8px;">方案内容 <span class="breezetts2-info" tabindex="0">i<span class="breezetts2-info-body">写成 <code>/模式/标志</code> 的完整形式即可，例如 <code>/abc/gm</code>；只写模式则用默认标志。<br>默认方案 <code>${DEFAULT_PATTERN}</code> 只匹配<b>行首</b>、且第一个标签含 <code>|</code> 的那串标签 —— 行内方括号、markdown 链接、别的插件生成的 HTML/CSS/JS 都不碰（这是踩过坑之后刻意收窄的）。</span></span></label><input type="text" id="breezetts2-hide-tags-pattern" class="text_pole" value="${settings.chatTagHiding?.pattern || ''}" placeholder="/模式/标志" style="flex: 1;"></div>
+                            <div class="breezetts2-setting-row" id="breezetts2-hide-tags-save-row" style="${settings.chatTagHiding?.enabled ? '' : 'display: none;'}"><input type="text" id="breezetts2-hide-tags-scheme-name" class="text_pole" placeholder="方案名（存进上面的下拉）" style="flex: 1; min-width: 0;"><button id="breezetts2-hide-tags-save" class="menu_button" style="flex: 0 0 auto; margin-left: 6px;">存为方案</button><button id="breezetts2-hide-tags-delete" class="menu_button" style="flex: 0 0 auto; margin-left: 4px;">删除</button></div>
                             <div class="breezetts2-setting-row" id="breezetts2-hide-tags-status" style="font-size:0.85em;"></div>
                         </div>
                         <!-- 场景音效：本模块只管音量 / 淡入淡出这类播放参数。
@@ -3487,7 +3520,7 @@ import { DEFAULT_PATTERN, DEFAULT_FLAGS, PATTERN_PRESETS, pickTagHidingConfig, p
                             <div class="breezetts2-setting-row"><label>事件音音量</label><input type="range" id="breezetts2-event-volume" class="breezetts2-slider" min="0" max="1" step="0.05" value="${settings.eventSoundVolume ?? 0.6}"><span id="breezetts2-event-volume-val">${((settings.eventSoundVolume ?? 0.6) * 100).toFixed(0)}%</span></div>
                             <div class="breezetts2-setting-row"><label>淡入淡出</label><select id="breezetts2-ambient-fade" class="text_pole"><option value="0"${(settings.ambientFadeDuration ?? 0) == 0 ? ' selected' : ''}>关闭</option><option value="100"${(settings.ambientFadeDuration ?? 0) == 100 ? ' selected' : ''}>0.1 秒</option><option value="200"${(settings.ambientFadeDuration ?? 0) == 200 ? ' selected' : ''}>0.2 秒</option><option value="300"${(settings.ambientFadeDuration ?? 0) == 300 ? ' selected' : ''}>0.3 秒</option><option value="400"${(settings.ambientFadeDuration ?? 0) == 400 ? ' selected' : ''}>0.4 秒</option><option value="500"${(settings.ambientFadeDuration ?? 0) == 500 ? ' selected' : ''}>0.5 秒</option><option value="1000"${(settings.ambientFadeDuration ?? 0) == 1000 ? ' selected' : ''}>1 秒</option><option value="1500"${(settings.ambientFadeDuration ?? 0) == 1500 ? ' selected' : ''}>1.5 秒</option><option value="2000"${(settings.ambientFadeDuration ?? 0) == 2000 ? ' selected' : ''}>2 秒</option><option value="3000"${(settings.ambientFadeDuration ?? 0) == 3000 ? ' selected' : ''}>3 秒</option></select></div>
                             <div class="breezetts2-setting-row checkbox-row"><label for="breezetts2-ambient-loop-scene">同场景下循环播放场景音</label><input type="checkbox" id="breezetts2-ambient-loop-scene" ${settings.ambientLoopByScene ? 'checked' : ''}></div>
-                            <div class="breezetts2-setting-row" style="font-size:0.85em; opacity:0.7;">音效放哪、怎么命名、四个文件夹的区别，见 README 的「场景音效的目录约定」或 <code>data\pjy\_说明.txt</code>。</div>
+                            <div class="breezetts2-setting-row"><span class="breezetts2-info" tabindex="0">i<span class="breezetts2-info-body">音效放哪、怎么命名、四个文件夹的区别，见 README 的「场景音效的目录约定」或 <code>data\pjy\_说明.txt</code>。</span></span></div>
                         </div>
                         <!-- 模块3：缓存管理 -->
                         <div class="breezetts2-setting-module">
@@ -3729,6 +3762,84 @@ import { DEFAULT_PATTERN, DEFAULT_FLAGS, PATTERN_PRESETS, pickTagHidingConfig, p
             }
             return s.chatTagHiding;
         };
+        // ---- 过滤方案：下拉 / 存为方案 / 删除 / 手动改方案内容 ----
+        const schemeSel = panel.querySelector('#breezetts2-hide-tags-scheme');
+        const schemeNameInput = panel.querySelector('#breezetts2-hide-tags-scheme-name');
+        const schemeSaveBtn = panel.querySelector('#breezetts2-hide-tags-save');
+        const schemeDelBtn = panel.querySelector('#breezetts2-hide-tags-delete');
+        const setHideTagsStatus = (msg, good = true) => {
+            if (!hideTagsStatus) return;
+            hideTagsStatus.textContent = msg || '';
+            hideTagsStatus.style.color = good ? '' : 'var(--fullred, #e06666)';
+        };
+        const refreshSchemeSelect = () => {
+            if (schemeSel) schemeSel.innerHTML = schemeOptions(hideTagsEnsureCfg());
+        };
+        const applyScheme = (name) => {
+            const cfg = hideTagsEnsureCfg();
+            const hit = listSchemes(cfg).find(s => s.name === name);
+            if (!hit) return false;                      // 选的是「当前（自定义）」
+            cfg.pattern = hit.pattern;
+            cfg.flags = hit.flags;
+            if (hideTagsInput) hideTagsInput.value = `/${hit.pattern}/${hit.flags}`;
+            saveSettings();
+            updateHideTagsStatus(syncChatTagHiding());
+            setHideTagsStatus(`已应用方案：${hit.name}`);
+            return true;
+        };
+        if (schemeSel) schemeSel.addEventListener('change', (e) => applyScheme(e.target.value));
+        if (schemeSaveBtn) {
+            schemeSaveBtn.addEventListener('click', () => {
+                const cfg = hideTagsEnsureCfg();
+                const parsed = normalizeRegexInput(hideTagsInput ? hideTagsInput.value : cfg.pattern,
+                    cfg.flags || DEFAULT_FLAGS);
+                const res = addUserScheme(cfg, schemeNameInput ? schemeNameInput.value : '',
+                    parsed.pattern, parsed.flags);
+                if (!res.ok) { setHideTagsStatus(res.error, false); return; }
+                cfg.pattern = parsed.pattern;
+                cfg.flags = parsed.flags;
+                if (hideTagsInput) hideTagsInput.value = `/${parsed.pattern}/${parsed.flags}`;
+                saveSettings();
+                refreshSchemeSelect();
+                updateHideTagsStatus(syncChatTagHiding());
+                setHideTagsStatus('已存为方案 —— 以后可从下拉里直接选');
+            });
+        }
+        if (schemeDelBtn) {
+            schemeDelBtn.addEventListener('click', () => {
+                const cfg = hideTagsEnsureCfg();
+                const name = schemeSel ? schemeSel.value : '';
+                if (!name) { setHideTagsStatus('「当前（自定义）」不是存下来的方案，没有可删的', false); return; }
+                if (!listSchemes(cfg).some(s => !s.builtin && s.name === name)) {
+                    setHideTagsStatus('内置方案删不掉（它随插件更新）', false);
+                    return;
+                }
+                removeUserScheme(cfg, name);
+                saveSettings();
+                refreshSchemeSelect();
+                setHideTagsStatus(`已删除方案：${name}`);
+            });
+        }
+        if (hideTagsInput) {
+            hideTagsInput.addEventListener('change', () => {
+                const cfg = hideTagsEnsureCfg();
+                const parsed = normalizeRegexInput(hideTagsInput.value, cfg.flags || DEFAULT_FLAGS);
+                cfg.pattern = parsed.pattern;
+                cfg.flags = parsed.flags;
+                hideTagsInput.value = parsed.pattern ? `/${parsed.pattern}/${parsed.flags}` : '';
+                saveSettings();
+                refreshSchemeSelect();
+                updateHideTagsStatus(syncChatTagHiding());
+            });
+        }
+        // 「i」小标：点击展开/收起（手机没有 hover，所以要这条）
+        panel.addEventListener('click', (e) => {
+            const tip = e.target && e.target.closest ? e.target.closest('.breezetts2-info') : null;
+            if (!tip || !panel.contains(tip)) return;
+            e.preventDefault();
+            tip.classList.toggle('is-open');
+        });
+
         const updateHideTagsStatus = (result) => {
             if (!hideTagsStatus) return;
             const ctx = getContext();

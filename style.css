@@ -1220,3 +1220,62 @@ v1.2.7
     font-size: 0.78em;
     opacity: 0.75;
 }
+
+/* ---- 「i」小标与它的说明气泡（面板瘦身用）---------------------------------
+   默认收起；悬停 / 键盘聚焦 / 点击（触屏）时展开。点击态用 .is-open 类，
+   由面板上的委托事件切换，这样手机上也能点开。 */
+.breezetts2-info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    margin-left: 4px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    font-size: 10px;
+    font-style: italic;
+    line-height: 1;
+    opacity: 0.65;
+    cursor: help;
+    position: relative;
+    vertical-align: middle;
+    user-select: none;
+}
+
+.breezetts2-info:hover,
+.breezetts2-info:focus { opacity: 1; }
+
+.breezetts2-info-body {
+    display: none;
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 6px);
+    left: 0;
+    width: max-content;
+    max-width: min(420px, 70vw);
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--SmartThemeBlurTintColor, #222);
+    color: var(--SmartThemeBodyColor, #eee);
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    font-size: 0.9em;
+    font-style: normal;
+    line-height: 1.5;
+    text-align: left;
+    white-space: normal;
+    opacity: 1;
+    pointer-events: none;
+}
+
+.breezetts2-info:hover .breezetts2-info-body,
+.breezetts2-info:focus .breezetts2-info-body,
+.breezetts2-info.is-open .breezetts2-info-body {
+    display: block;
+    pointer-events: auto;
+}
+
+/* 方案那一行：输入框与按钮挤在一行时不要换行 */
+#breezetts2-hide-tags-save-row input[type="text"] { min-width: 0; }
+#breezetts2-hide-tags-save-row button { white-space: nowrap; }

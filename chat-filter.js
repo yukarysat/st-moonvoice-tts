@@ -208,6 +208,87 @@ export const PATTERN_PRESETS = [
     },
 ];
 
+// ============================================================================
+//  过滤方案（schcmes）：内置几档 + 用户自己存的方案，喂给面板的下拉列表
+// ============================================================================
+//
+// 设计取舍：
+//   · 内置方案写在代码里（PATTERN_PRESETS），随插件更新；
+//   · 用户方案存在 settings.chatTagHiding.userSchemes，**永不**被更新覆盖；
+//   · 下拉里永远有一个"当前（自定义）"项 —— 用户直接改方案内容时选中它，
+//     这样"改了但没存"的状态是可见的，不会被误认为某个已存方案。
+
+/** 用户方案的字段与上限。 */
+export const USER_SCHEME_KEYS = ['name', 'pattern', 'flags'];
+export const MAX_USER_SCHEMES = 20;
+export const MAX_SCHEME_NAME_LENGTH = 24;
+
+/** 内置方案（把 PATTERN_PRESETS 归一成 scheme 形状）。 */
+export function builtinSchemes() {
+    return PATTERN_PRESETS.map((x, i) => ({
+        name: x.label, pattern: x.pattern, flags: x.flags || DEFAULT_FLAGS, note: x.note || '', builtin: true, index: i,
+    }));
+}
+
+/** 用户方案列表（读设置，顺带清洗脏数据）。 */
+export function userSchemes(config) {
+    const raw = config && Array.isArray(config.userSchemes) ? config.userSchemes : [];
+    const out = [];
+    for (const item of raw) {
+        if (!item || typeof item !== 'object') continue;
+        const name = typeof item.name === 'string' ? item.name.trim() : '';
+        const pattern = typeof item.pattern === 'string' ? item.pattern : '';
+        if (!name || !pattern) continue;
+        out.push({ name, pattern, flags: typeof item.flags === 'string' && item.flags ? item.flags : DEFAULT_FLAGS, note: '', builtin: false });
+        if (out.length >= MAX_USER_SCHEMES) break;
+    }
+    return out;
+}
+
+/** 下拉列表要展示的全部方案：内置 + 用户。 */
+export function listSchemes(config) {
+    return [...builtinSchemes(), ...userSchemes(config)];
+}
+
+/** 当前 pattern/flags 命中哪个方案（没命中返回 null，面板就选"自定义"）。 */
+export function matchSchemeName(config) {
+    const pattern = typeof config?.pattern === 'string' ? config.pattern : DEFAULT_PATTERN;
+    const flags = typeof config?.flags === 'string' && config.flags ? config.flags : DEFAULT_FLAGS;
+    const hit = listSchemes(config).find(s => s.pattern === pattern && s.flags === flags);
+    return hit ? hit.name : null;
+}
+
+/**
+ * 存一个新方案（同名覆盖用户方案；**不允许覆盖内置方案名**）。
+ * @returns {{ok: boolean, error?: string}}
+ */
+export function addUserScheme(config, name, pattern, flags) {
+    const cleanName = typeof name === 'string' ? name.trim().slice(0, MAX_SCHEME_NAME_LENGTH) : '';
+    if (!cleanName) return { ok: false, error: '方案名不能为空' };
+    const cleanPattern = typeof pattern === 'string' ? pattern.trim() : '';
+    if (!cleanPattern) return { ok: false, error: '方案内容不能为空' };
+    const { pattern: bare, flags: parsedFlags } = normalizeRegexInput(cleanPattern, flags || DEFAULT_FLAGS);
+    const err = validatePattern(bare, parsedFlags);
+    if (err) return { ok: false, error: `正则不合法：${err}` };
+    if (builtinSchemes().some(s => s.name === cleanName)) {
+        return { ok: false, error: '这个名字与内置方案重名，换一个' };
+    }
+    config.userSchemes = userSchemes(config).filter(s => s.name !== cleanName);
+    config.userSchemes.push({ name: cleanName, pattern: bare, flags: parsedFlags });
+    if (config.userSchemes.length > MAX_USER_SCHEMES) {
+        config.userSchemes = config.userSchemes.slice(-MAX_USER_SCHEMES);
+    }
+    return { ok: true };
+}
+
+/** 删掉一个用户方案（内置方案删不掉）。 */
+export function removeUserScheme(config, name) {
+    const before = userSchemes(config);
+    const after = before.filter(s => s.name !== name);
+    config.userSchemes = after;
+    return after.length !== before.length;
+}
+
 /**
  * 算出「格式规范」应该插在请求里的哪个位置。
  *
