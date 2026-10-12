@@ -24,7 +24,9 @@ import {
          matchSchemeName,
          addUserScheme,
          removeUserScheme,
-         normalizeRegexInput } from './chat-filter.js';
+         normalizeRegexInput,
+         parseSchemeInput,
+         formatSchemeInput } from './chat-filter.js';
 (function () {
     // 设置存储键：写进 SillyTavern 的 extension_settings，一旦改动用户配置就会丢，绝不可改
     const extensionName = "st-breezetts2";
@@ -95,6 +97,7 @@ import {
             enabled: true,
             pattern: DEFAULT_PATTERN,
             flags: DEFAULT_FLAGS,
+            replace: '',
             userSchemes: [],   // 用户自己存的过滤方案（下拉里的「我的方案」）
         },
         voiceMap: {},
@@ -3399,7 +3402,8 @@ import {
             `<option value="${s.name}"${s.name === active ? ' selected' : ''}>${s.name}</option>`).join('');
         const builtin = all.filter(s => s.builtin);
         const mine = all.filter(s => !s.builtin);
-        return `<option value=""${active ? '' : ' selected'}>当前（自定义）</option>`
+        // 它不是"一个方案"，而是"当前内容没存成任何方案"的状态指示 —— 所以不可选（disabled）。
+        return `<option value=""${active ? '' : ' selected'} disabled>当前设置（未保存为方案）</option>`
             + `<optgroup label="内置方案">${render(builtin)}</optgroup>`
             + (mine.length ? `<optgroup label="我的方案">${render(mine)}</optgroup>` : '');
     }
@@ -3781,7 +3785,8 @@ import {
             if (!hit) return false;                      // 选的是「当前（自定义）」
             cfg.pattern = hit.pattern;
             cfg.flags = hit.flags;
-            if (hideTagsInput) hideTagsInput.value = `/${hit.pattern}/${hit.flags}`;
+            cfg.replace = hit.replace || '';
+            if (hideTagsInput) hideTagsInput.value = formatSchemeInput(hit);
             saveSettings();
             updateHideTagsStatus(syncChatTagHiding());
             setHideTagsStatus(`已应用方案：${hit.name}`);
@@ -3791,14 +3796,14 @@ import {
         if (schemeSaveBtn) {
             schemeSaveBtn.addEventListener('click', () => {
                 const cfg = hideTagsEnsureCfg();
-                const parsed = normalizeRegexInput(hideTagsInput ? hideTagsInput.value : cfg.pattern,
-                    cfg.flags || DEFAULT_FLAGS);
+                const parsed = parseSchemeInput(hideTagsInput ? hideTagsInput.value : cfg.pattern, cfg.flags);
                 const res = addUserScheme(cfg, schemeNameInput ? schemeNameInput.value : '',
-                    parsed.pattern, parsed.flags);
+                    parsed.pattern, parsed.flags, parsed.replace);
                 if (!res.ok) { setHideTagsStatus(res.error, false); return; }
                 cfg.pattern = parsed.pattern;
                 cfg.flags = parsed.flags;
-                if (hideTagsInput) hideTagsInput.value = `/${parsed.pattern}/${parsed.flags}`;
+                cfg.replace = parsed.replace;
+                if (hideTagsInput) hideTagsInput.value = formatSchemeInput(parsed);
                 saveSettings();
                 refreshSchemeSelect();
                 updateHideTagsStatus(syncChatTagHiding());
@@ -3823,10 +3828,11 @@ import {
         if (hideTagsInput) {
             hideTagsInput.addEventListener('change', () => {
                 const cfg = hideTagsEnsureCfg();
-                const parsed = normalizeRegexInput(hideTagsInput.value, cfg.flags || DEFAULT_FLAGS);
+                const parsed = parseSchemeInput(hideTagsInput.value, cfg.flags);
                 cfg.pattern = parsed.pattern;
                 cfg.flags = parsed.flags;
-                hideTagsInput.value = parsed.pattern ? `/${parsed.pattern}/${parsed.flags}` : '';
+                cfg.replace = parsed.replace;
+                hideTagsInput.value = parsed.pattern ? formatSchemeInput(parsed) : '';
                 saveSettings();
                 refreshSchemeSelect();
                 updateHideTagsStatus(syncChatTagHiding());

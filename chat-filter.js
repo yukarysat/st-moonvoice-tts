@@ -121,7 +121,7 @@ export function buildSceneHideScript(config = {}) {
         runOnEdit: false,
         findRegex: `/${pattern}/${flags}`,
         trimStrings: [],
-        replaceString: '',
+        replaceString: typeof config.replace === 'string' ? config.replace : '',
         placement: [...DISPLAY_PLACEMENTS],
         substituteRegex: 0,
         minDepth: null,
@@ -175,6 +175,7 @@ export function pickTagHidingConfig(settings, defaultEnabled = true) {
         pattern: rawPattern === LEGACY_DEFAULT_PATTERN ? DEFAULT_PATTERN : rawPattern,
         // 老版本没有 flags 字段；升级后默认要带 m（^ 才能按行匹配）
         flags: typeof src.flags === 'string' && src.flags ? src.flags : DEFAULT_FLAGS,
+        replace: typeof src.replace === 'string' ? src.replace : '',
     };
 }
 
@@ -185,28 +186,66 @@ export const PATTERN_PRESETS = [
         label: '行首标签簇（默认，最安全）',
         pattern: DEFAULT_PATTERN,
         flags: DEFAULT_FLAGS,
+        replace: '',
         note: '只藏行首那串 [角色|性别][情感][场景]，行内方括号、markdown 链接、其它插件的 HTML 都不碰',
+    },
+    {
+        label: '只隐藏情感描述（最推荐，简洁）',
+        pattern: '(^[ \\t]*\\[[^\\]\\n]*\\|[^\\]\\n]*\\])[ \\t]*\\[[^\\]\\n]*\\]',
+        flags: 'gm',
+        replace: '$1',
+        note: '角色与场景保留，只把最长的那段情感描述藏掉。注意：格式里没有情感标签时，会连着把下一个标签当作情感删掉',
+    },
+    {
+        label: '只隐藏情感+场景（最简洁）',
+        pattern: '(^[ \\t]*\\[[^\\]\\n]*\\|[^\\]\\n]*\\])(?:[ \\t]*\\[[^\\]\\n]*\\]){1,2}',
+        flags: 'gm',
+        replace: '$1',
+        note: '气泡里只剩 [角色|性别]“台词”，信息密度最高；想临时看回情感描述就换回默认方案',
     },
     {
         label: '行首任意方括号（卡里没写 | 时用）',
         pattern: '^[ \\t]*(?:\\[[^\\]\\n]*\\]){1,4}',
         flags: 'gm',
+        replace: '',
         note: '不要求第一个标签含 |；仍然只看行首，比默认略宽一点',
     },
     {
         label: '只隐藏场景标签',
         pattern: '\\[[^\\]\\n]*\\](?=\\s*[「"“『])',
         flags: 'g',
+        replace: '',
         note: '只藏引号前那一段（角色与情感标签保留）；行内方括号若紧跟引号也可能被碰到',
     },
     {
         label: '隐藏所有方括号（旧版行为，可能冲突 ✗）',
         pattern: LEGACY_DEFAULT_PATTERN,
         flags: 'g',
+        replace: '',
         note: '会误伤其它预设/插件生成的内容（例如 Reborn 的「行动选项」把 <options> 换成整段 HTML，'
             + '里面的 [..] 被删掉就崩了）—— 除非你确定没有这类功能，否则别用',
     },
 ];
+
+/**
+ * 解析面板输入框里的方案文本：`/模式/标志` 或 `/模式/标志 => 替换内容`。
+ * 拆出来放这里是为了能单测 —— 面板上的正则/替换一旦解析错，用户看到的过滤效果就会莫名其妙。
+ */
+export function parseSchemeInput(raw, fallbackFlags) {
+    const text = String(raw === undefined || raw === null ? '' : raw);
+    const arrow = text.indexOf('=>');
+    const body = arrow >= 0 ? text.slice(0, arrow) : text;
+    const replace = arrow >= 0 ? text.slice(arrow + 2).trim() : '';
+    const parsed = normalizeRegexInput(body, fallbackFlags || DEFAULT_FLAGS);
+    return { pattern: parsed.pattern, flags: parsed.flags, replace };
+}
+
+/** 反向：把方案（或 {pattern,flags,replace}）格式化成输入框文本。 */
+export function formatSchemeInput(scheme) {
+    if (!scheme || !scheme.pattern) return '';
+    const base = `/${scheme.pattern}/${scheme.flags || DEFAULT_FLAGS}`;
+    return scheme.replace ? `${base} => ${scheme.replace}` : base;
+}
 
 // ============================================================================
 //  过滤方案（schcmes）：内置几档 + 用户自己存的方案，喂给面板的下拉列表
@@ -226,7 +265,8 @@ export const MAX_SCHEME_NAME_LENGTH = 24;
 /** 内置方案（把 PATTERN_PRESETS 归一成 scheme 形状）。 */
 export function builtinSchemes() {
     return PATTERN_PRESETS.map((x, i) => ({
-        name: x.label, pattern: x.pattern, flags: x.flags || DEFAULT_FLAGS, note: x.note || '', builtin: true, index: i,
+        name: x.label, pattern: x.pattern, flags: x.flags || DEFAULT_FLAGS,
+        replace: x.replace || '', note: x.note || '', builtin: true, index: i,
     }));
 }
 
@@ -239,7 +279,12 @@ export function userSchemes(config) {
         const name = typeof item.name === 'string' ? item.name.trim() : '';
         const pattern = typeof item.pattern === 'string' ? item.pattern : '';
         if (!name || !pattern) continue;
-        out.push({ name, pattern, flags: typeof item.flags === 'string' && item.flags ? item.flags : DEFAULT_FLAGS, note: '', builtin: false });
+        out.push({
+            name, pattern,
+            flags: typeof item.flags === 'string' && item.flags ? item.flags : DEFAULT_FLAGS,
+            replace: typeof item.replace === 'string' ? item.replace : '',
+            note: '', builtin: false,
+        });
         if (out.length >= MAX_USER_SCHEMES) break;
     }
     return out;
@@ -254,7 +299,8 @@ export function listSchemes(config) {
 export function matchSchemeName(config) {
     const pattern = typeof config?.pattern === 'string' ? config.pattern : DEFAULT_PATTERN;
     const flags = typeof config?.flags === 'string' && config.flags ? config.flags : DEFAULT_FLAGS;
-    const hit = listSchemes(config).find(s => s.pattern === pattern && s.flags === flags);
+    const replace = typeof config?.replace === 'string' ? config.replace : '';
+    const hit = listSchemes(config).find(s => s.pattern === pattern && s.flags === flags && s.replace === replace);
     return hit ? hit.name : null;
 }
 
@@ -262,7 +308,7 @@ export function matchSchemeName(config) {
  * 存一个新方案（同名覆盖用户方案；**不允许覆盖内置方案名**）。
  * @returns {{ok: boolean, error?: string}}
  */
-export function addUserScheme(config, name, pattern, flags) {
+export function addUserScheme(config, name, pattern, flags, replace = '') {
     const cleanName = typeof name === 'string' ? name.trim().slice(0, MAX_SCHEME_NAME_LENGTH) : '';
     if (!cleanName) return { ok: false, error: '方案名不能为空' };
     const cleanPattern = typeof pattern === 'string' ? pattern.trim() : '';
@@ -274,7 +320,7 @@ export function addUserScheme(config, name, pattern, flags) {
         return { ok: false, error: '这个名字与内置方案重名，换一个' };
     }
     config.userSchemes = userSchemes(config).filter(s => s.name !== cleanName);
-    config.userSchemes.push({ name: cleanName, pattern: bare, flags: parsedFlags });
+    config.userSchemes.push({ name: cleanName, pattern: bare, flags: parsedFlags, replace: String(replace || '') });
     if (config.userSchemes.length > MAX_USER_SCHEMES) {
         config.userSchemes = config.userSchemes.slice(-MAX_USER_SCHEMES);
     }

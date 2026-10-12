@@ -402,9 +402,12 @@ The filtering rule in **Chat display** is now a **scheme**:
 
 - The dropdown has three parts: **built-in schemes** (updated with the plugin) / **my schemes**
   (yours, never overwritten by updates) / **current (custom)**
-- Editing "scheme content" switches to **current (custom)** — that is the "changed but not saved" state.
-  Give it a name and press **Save as scheme** to keep it in the list; **Delete** only removes your own
+- Editing "scheme content" switches the dropdown to **current settings (not saved as a scheme)** — it is not a
+  scheme but a status marker: nothing in the list matches what you typed, so it is not selectable. Give it a
+  name and press **Save as scheme** to keep it; **Delete** only removes your own schemes
 - A name that collides with a built-in scheme is refused, so the shipped ones always stay intact
+- "Scheme content" syntax: `/pattern/flags`; to delete only a middle part, use a `$1` backreference, e.g.
+  `/^(\[[^\]\n]*\|[^\]\n]*\])[ \t]*\[[^\]\n]*\]/gm => $1` (hide the emotion, keep character and scene)
 
 Every long explanatory paragraph in the panel is now folded into an inline **`i`** tip: hover or click to
 expand (click matters on phones, where hover does not exist). Rows keep only their controls and labels.
