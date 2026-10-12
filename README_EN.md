@@ -274,6 +274,8 @@ The "filter regex" field accepts two useful patterns out of the box:
 | --- | --- |
 | Hide all three tags, keep only the line | `\[[^\]\n]*\]` |
 | Hide only the `[scene]` part (keep character and emotion) | `\[[^\]\n]*\](?=\s*[「"“『])` |
+| **Hide only the emotion** (keep character and scene) — recommended | `(^[ \t]*\[[^\]\n]*\|[^\]\n]*\])[ \t]*\[[^\]\n]*\]` -> `$1` |
+| **Hide emotion + scene** (leaves `[character|gender]“dialogue”`) | `(^[ \t]*\[[^\]\n]*\|[^\]\n]*\])(?:[ \t]*\[[^\]\n]*\]){1,2}` -> `$1` |
 
 > If SillyTavern's **regex extension is disabled**, the rule will not take effect — the settings row
 > says so. The setting is **stored per preset**, so presets can display differently.
