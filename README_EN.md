@@ -431,6 +431,16 @@ early-version id `moonvoice-hide-scene-tags`). `setup/236` has an assertion guar
 > ⚠️ The script is **managed**: you can see it in SillyTavern's regex panel, but edit it in the **plugin
 > panel** — a direct edit there is synced back on the next load.
 
+### How versions work
+
+**The plugin and the integration package are versioned separately**, because neither contains the other:
+
+- **Plugin** (a SillyTavern extension, updated via git): currently `1.2.7-moonvoice.7`
+- **Integration package** (backend + sidecar + launchers + sound library): currently `1.2.7-moonvoice.6`
+
+So a plugin bug fix only needs a plugin update — no new package download. A new package appears only when its
+own contents change (sidecar, backend, launchers, sound folders, …).
+
 ## Settings
 
 | Setting | Default | Notes |
